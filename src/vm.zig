@@ -150,14 +150,13 @@ pub const VM = struct {
                     if (result != InterpretResult.INTERPRET_OK) return result;
                 },
                 OpCode.NEGATE => {
-                    const value = self.pop() catch |err| {
-                        std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+                    if (self.stack.items.len == 0) {
+                        std.debug.print("Stack underflow\n", .{});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
-                    };
-                    self.push(-value) catch |err| {
-                        std.debug.print("Error pushing constant: {s}\n", .{@errorName(err)});
-                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
-                    };
+                    }
+                    // Negate the value in place at the top of the stack
+                    const last_idx = self.stack.items.len - 1;
+                    self.stack.items[last_idx] = -self.stack.items[last_idx];
                 },
                 OpCode.RETURN => {
                     // Don't pop the final value, just return success
