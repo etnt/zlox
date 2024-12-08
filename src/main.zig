@@ -1,6 +1,7 @@
 const std = @import("std");
-const ByteArray = @import("byte_array.zig").ByteArray;
-const OpCode = @import("opcodes.zig").OpCode;
+const root = @import("root.zig");
+const OpCode = root.OpCode;
+const Chunk = root.Chunk;
 
 pub fn main() !void {
     // Get a general purpose allocator
@@ -8,36 +9,53 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    // Create a new byte array for chunk of opcodes
-    var chunk = ByteArray.init(allocator);
+    // Create a new chunk that can store both opcodes and constants
+    var chunk = Chunk.init(allocator);
     defer chunk.deinit();
 
-    // Push some operation codes
-    try chunk.push(OpCode.PUSH);  // 0x01
-    try chunk.push(OpCode.ADD);   // 0x03
-    try chunk.push(OpCode.RETURN); // 0x00
+    // Add some constants to our chunk
+    const const1 = try chunk.addConstant(1.2);
+    const const2 = try chunk.addConstant(3.4);
 
-    // Print current state with opcode names
-    std.debug.print("After pushing chunk:\n", .{});
-    chunk.printOpcodes(OpCode.getName);
+    // Write a sequence of opcodes that will:
+    // 1. Push first constant (1.2)
+    // 2. Push second constant (3.4)
+    // 3. Add them together
+    // 4. Return
+    try chunk.writeOpcode(OpCode.PUSH);
+    try chunk.writeOpcode(@intCast(const1)); // Index of first constant
+    try chunk.writeOpcode(OpCode.PUSH);
+    try chunk.writeOpcode(@intCast(const2)); // Index of second constant
+    try chunk.writeOpcode(OpCode.ADD);
+    try chunk.writeOpcode(OpCode.RETURN);
 
-    // Pop an opcode
-    if (chunk.pop()) |opcode| {
-        std.debug.print("\nPopped opcode: 0x{X:0>2} ({s})\n\n", .{opcode, OpCode.getName(opcode)});
-    }
-
-    // Print final state with opcode names
-    std.debug.print("Final state:\n", .{});
-    chunk.printOpcodes(OpCode.getName);
+    // Disassemble the chunk to see its contents
+    std.debug.print("\nChunk Disassembly:\n", .{});
+    chunk.disassemble("main");
 }
 
-test "chunk operations" {
-    var chunk = ByteArray.init(std.testing.allocator);
+test "chunk with constants" {
+    var chunk = Chunk.init(std.testing.allocator);
     defer chunk.deinit();
 
-    try chunk.push(OpCode.PUSH);
-    try chunk.push(OpCode.ADD);
-    try std.testing.expectEqual(@as(usize, 2), chunk.len());
-    try std.testing.expectEqual(OpCode.ADD, chunk.pop().?);
-    try std.testing.expectEqual(OpCode.PUSH, chunk.pop().?);
+    // Add constants
+    const const1 = try chunk.addConstant(1.2);
+    const const2 = try chunk.addConstant(3.4);
+    try std.testing.expectEqual(@as(usize, 0), const1);
+    try std.testing.expectEqual(@as(usize, 1), const2);
+
+    // Write opcodes
+    try chunk.writeOpcode(OpCode.PUSH);
+    try chunk.writeOpcode(@intCast(const1));
+    try chunk.writeOpcode(OpCode.PUSH);
+    try chunk.writeOpcode(@intCast(const2));
+    try chunk.writeOpcode(OpCode.ADD);
+    try chunk.writeOpcode(OpCode.RETURN);
+
+    // Verify code length (6 opcodes total)
+    try std.testing.expectEqual(@as(usize, 6), chunk.code.len());
+
+    // Verify constants
+    try std.testing.expectEqual(@as(f64, 1.2), chunk.constants.at(0).?);
+    try std.testing.expectEqual(@as(f64, 3.4), chunk.constants.at(1).?);
 }
