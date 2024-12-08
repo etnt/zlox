@@ -66,7 +66,7 @@ pub const Chunk = struct {
 
     /// Disassemble a single instruction at the given offset
     /// Returns the offset of the next instruction
-    fn disassembleInstruction(self: *const Chunk, offset: usize) usize {
+    pub fn disassembleInstruction(self: *const Chunk, offset: usize) usize {
         if (self.code.at(offset)) |instruction| {
             switch (instruction) {
                 OpCode.CONSTANT => {
@@ -89,7 +89,7 @@ pub const Chunk = struct {
                 },
             }
         } else {
-            std.debug.print("Error: Could not read instruction\n", .{});
+            std.debug.print("Error: Could not read instruction at offset {d}\n", .{offset});
             return offset + 1;
         }
     }

@@ -5,6 +5,7 @@ pub const OpCode = @import("opcodes.zig").OpCode;
 pub const Value = @import("value.zig").Value;
 pub const ValueArray = @import("value.zig").ValueArray;
 pub const Chunk = @import("chunk.zig").Chunk;
+pub const VM = @import("vm.zig").VM;
 
 test {
     // This will run all tests in referenced files

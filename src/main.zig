@@ -2,6 +2,7 @@ const std = @import("std");
 const root = @import("root.zig");
 const OpCode = root.OpCode;
 const Chunk = root.Chunk;
+const VM = root.VM;
 
 pub fn main() !void {
     // Get a general purpose allocator
@@ -45,6 +46,15 @@ pub fn main() !void {
     for (chunk.lines.runs.items, 0..) |run, i| {
         std.debug.print("Run {d}: {d} instructions from line {d}\n", .{ i + 1, run.count, run.line });
     }
+
+    // Create and initialize a VM with tracing enabled
+    var vm = VM.init(&chunk, true);
+    defer vm.deinit();
+
+    // Interpret the chunk
+    std.debug.print("\nInterpreting Chunk:\n", .{});
+    const result = vm.interpret();
+    std.debug.print("\nInterpretation result: {}\n", .{result});
 }
 
 test "chunk with constants" {
@@ -85,4 +95,9 @@ test "chunk with constants" {
     try std.testing.expectEqual(@as(u32, 123), chunk.lines.runs.items[0].line);
     try std.testing.expectEqual(@as(u32, 3), chunk.lines.runs.items[1].count);
     try std.testing.expectEqual(@as(u32, 456), chunk.lines.runs.items[1].line);
+
+    // Test VM interpretation
+    var vm = VM.init(&chunk, false);
+    defer vm.deinit();
+    try std.testing.expectEqual(root.InterpretResult.INTERPRET_OK, vm.interpret());
 }
