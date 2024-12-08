@@ -79,6 +79,10 @@ pub const Chunk = struct {
                     std.debug.print("CONSTANT         <error>\n", .{});
                     return offset + 2;
                 },
+                OpCode.NEGATE => {
+                    std.debug.print("NEGATE\n", .{});
+                    return offset + 1;
+                },
                 OpCode.RETURN => {
                     std.debug.print("RETURN\n", .{});
                     return offset + 1;

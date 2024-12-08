@@ -105,9 +105,27 @@ pub const VM = struct {
 
             switch (opcode) {
                 OpCode.CONSTANT => {
+                    self.push(self.chunk.constants.at(self.ip[0]).?) catch |err| {
+                        std.debug.print("Error pushing constant: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
                     self.ip += 1;
                 },
+                OpCode.NEGATE => {
+                    const value = self.pop() catch |err| {
+                        std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
+                    self.push(-value) catch |err| {
+                        std.debug.print("Error pushing constant: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
+                },
                 OpCode.RETURN => {
+                    _ = self.pop() catch |err| {
+                        std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
                     return InterpretResult.INTERPRET_OK;
                 },
                 else => {

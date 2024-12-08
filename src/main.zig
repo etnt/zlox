@@ -17,7 +17,6 @@ pub fn main() !void {
     // Add some constants to our chunk
     const const1 = try chunk.addConstant(1.2);
     const const2 = try chunk.addConstant(3.4);
-    const const3 = try chunk.addConstant(5.6);
 
     // Write a sequence of opcodes with line numbers that demonstrate run-length encoding:
     // Line 1234: Two instructions (CONSTANT 1.2)
@@ -29,8 +28,7 @@ pub fn main() !void {
     try chunk.writeByte(@intCast(const2), 4567);
 
     // Still line 4567: (CONSTANT 5.6)
-    try chunk.writeOpcode(OpCode.CONSTANT, 4567);
-    try chunk.writeByte(@intCast(const3), 4567);
+    try chunk.writeOpcode(OpCode.NEGATE, 4567);
 
     // Back to line 1234: One instruction (RETURN)
     try chunk.writeOpcode(OpCode.RETURN, 1234);
