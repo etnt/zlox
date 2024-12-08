@@ -18,15 +18,13 @@ pub fn main() !void {
     const const2 = try chunk.addConstant(3.4);
 
     // Write a sequence of opcodes that will:
-    // 1. Push first constant (1.2)
-    // 2. Push second constant (3.4)
-    // 3. Add them together
-    // 4. Return
-    try chunk.writeOpcode(OpCode.PUSH);
-    try chunk.writeOpcode(@intCast(const1)); // Index of first constant
-    try chunk.writeOpcode(OpCode.PUSH);
-    try chunk.writeOpcode(@intCast(const2)); // Index of second constant
-    try chunk.writeOpcode(OpCode.ADD);
+    // 1. Load first constant (1.2)
+    // 2. Load second constant (3.4)
+    // 3. Return
+    try chunk.writeOpcode(OpCode.CONSTANT);
+    try chunk.writeByte(@intCast(const1)); // Index of first constant
+    try chunk.writeOpcode(OpCode.CONSTANT);
+    try chunk.writeByte(@intCast(const2)); // Index of second constant
     try chunk.writeOpcode(OpCode.RETURN);
 
     // Disassemble the chunk to see its contents
@@ -44,16 +42,15 @@ test "chunk with constants" {
     try std.testing.expectEqual(@as(usize, 0), const1);
     try std.testing.expectEqual(@as(usize, 1), const2);
 
-    // Write opcodes
-    try chunk.writeOpcode(OpCode.PUSH);
-    try chunk.writeOpcode(@intCast(const1));
-    try chunk.writeOpcode(OpCode.PUSH);
-    try chunk.writeOpcode(@intCast(const2));
-    try chunk.writeOpcode(OpCode.ADD);
+    // Write opcodes with their operands
+    try chunk.writeOpcode(OpCode.CONSTANT);
+    try chunk.writeByte(@intCast(const1));
+    try chunk.writeOpcode(OpCode.CONSTANT);
+    try chunk.writeByte(@intCast(const2));
     try chunk.writeOpcode(OpCode.RETURN);
 
-    // Verify code length (6 opcodes total)
-    try std.testing.expectEqual(@as(usize, 6), chunk.code.len());
+    // Verify code length (5 bytes total: CONSTANT + index1 + CONSTANT + index2 + RETURN)
+    try std.testing.expectEqual(@as(usize, 5), chunk.code.len());
 
     // Verify constants
     try std.testing.expectEqual(@as(f64, 1.2), chunk.constants.at(0).?);
