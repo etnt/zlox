@@ -1,5 +1,6 @@
 const std = @import("std");
 const ByteArray = @import("byte_array.zig").ByteArray;
+const OpCode = @import("opcodes.zig").OpCode;
 
 pub fn main() !void {
     // Get a general purpose allocator
@@ -7,36 +8,36 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    // Create a new byte array
-    var array = ByteArray.init(allocator);
-    defer array.deinit();
+    // Create a new byte array for chunk of opcodes
+    var chunk = ByteArray.init(allocator);
+    defer chunk.deinit();
 
-    // Push some bytes
-    try array.push(10);
-    try array.push(20);
-    try array.push(30);
+    // Push some operation codes
+    try chunk.push(OpCode.PUSH);  // 0x01
+    try chunk.push(OpCode.ADD);   // 0x03
+    try chunk.push(OpCode.RETURN); // 0x00
 
-    // Print current state
-    std.debug.print("After pushing: ", .{});
-    array.print();
+    // Print current state with opcode names
+    std.debug.print("After pushing chunk:\n", .{});
+    chunk.printOpcodes(OpCode.getName);
 
-    // Pop a byte
-    // If array.pop() returns null (the array was empty), the code within the if block is skipped.
-    // If array.pop() returns a value (the last byte), that value is assigned to the byte variable,
-    // and the code inside the if block executes.
-    if (array.pop()) |byte| {
-        std.debug.print("Popped byte: {d}\n", .{byte});
+    // Pop an opcode
+    if (chunk.pop()) |opcode| {
+        std.debug.print("\nPopped opcode: 0x{X:0>2} ({s})\n\n", .{opcode, OpCode.getName(opcode)});
     }
 
-    // Print final state
-    std.debug.print("Final state: ", .{});
-    array.print();
+    // Print final state with opcode names
+    std.debug.print("Final state:\n", .{});
+    chunk.printOpcodes(OpCode.getName);
 }
 
-test "main functionality" {
-    // This test ensures the main file compiles and imports work correctly
-    var array = ByteArray.init(std.testing.allocator);
-    defer array.deinit();
-    try array.push(42);
-    try std.testing.expectEqual(@as(usize, 1), array.len());
+test "chunk operations" {
+    var chunk = ByteArray.init(std.testing.allocator);
+    defer chunk.deinit();
+
+    try chunk.push(OpCode.PUSH);
+    try chunk.push(OpCode.ADD);
+    try std.testing.expectEqual(@as(usize, 2), chunk.len());
+    try std.testing.expectEqual(OpCode.ADD, chunk.pop().?);
+    try std.testing.expectEqual(OpCode.PUSH, chunk.pop().?);
 }

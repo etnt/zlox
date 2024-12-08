@@ -27,11 +27,21 @@ pub const ByteArray = struct {
         return self.bytes.pop();
     }
 
-    /// Print the contents of the array
+    /// Print the contents of the array in hexadecimal format
     pub fn print(self: *const ByteArray) void {
         std.debug.print("[ ", .{});
         for (self.bytes.items) |byte| {
-            std.debug.print("{d} ", .{byte});
+            std.debug.print("0x{X:0>2} ", .{byte});
+        }
+        std.debug.print("]\n", .{});
+    }
+
+    /// Print the contents of the array with opcode names
+    pub fn printOpcodes(self: *const ByteArray, getOpcodeName: fn(u8) []const u8) void {
+        std.debug.print("[\n", .{});
+        for (self.bytes.items) |byte| {
+            const name = getOpcodeName(byte);
+            std.debug.print("  0x{X:0>2} ({s})\n", .{byte, name});
         }
         std.debug.print("]\n", .{});
     }
@@ -52,28 +62,28 @@ test "ByteArray - push bytes" {
     var array = ByteArray.init(std.testing.allocator);
     defer array.deinit();
 
-    try array.push(42);
+    try array.push(0x42);
     try std.testing.expectEqual(@as(usize, 1), array.len());
-    try std.testing.expectEqual(@as(u8, 42), array.at(0).?);
+    try std.testing.expectEqual(@as(u8, 0x42), array.at(0).?);
 
-    try array.push(255);
+    try array.push(0xFF);
     try std.testing.expectEqual(@as(usize, 2), array.len());
-    try std.testing.expectEqual(@as(u8, 255), array.at(1).?);
+    try std.testing.expectEqual(@as(u8, 0xFF), array.at(1).?);
 }
 
 test "ByteArray - pop bytes" {
     var array = ByteArray.init(std.testing.allocator);
     defer array.deinit();
 
-    try array.push(10);
-    try array.push(20);
+    try array.push(0x10);
+    try array.push(0x20);
 
     const popped1 = array.pop();
-    try std.testing.expectEqual(@as(u8, 20), popped1.?);
+    try std.testing.expectEqual(@as(u8, 0x20), popped1.?);
     try std.testing.expectEqual(@as(usize, 1), array.len());
 
     const popped2 = array.pop();
-    try std.testing.expectEqual(@as(u8, 10), popped2.?);
+    try std.testing.expectEqual(@as(u8, 0x10), popped2.?);
     try std.testing.expectEqual(@as(usize, 0), array.len());
 }
 
@@ -89,20 +99,17 @@ test "ByteArray - multiple operations" {
     var array = ByteArray.init(std.testing.allocator);
     defer array.deinit();
 
-    // Test sequence of pushes
-    try array.push(1);
-    try array.push(2);
-    try array.push(3);
+    try array.push(0x01);
+    try array.push(0x02);
+    try array.push(0x03);
     try std.testing.expectEqual(@as(usize, 3), array.len());
 
-    // Test sequence of pops
-    try std.testing.expectEqual(@as(u8, 3), array.pop().?);
-    try std.testing.expectEqual(@as(u8, 2), array.pop().?);
+    try std.testing.expectEqual(@as(u8, 0x03), array.pop().?);
+    try std.testing.expectEqual(@as(u8, 0x02), array.pop().?);
     try std.testing.expectEqual(@as(usize, 1), array.len());
 
-    // Push more after pop
-    try array.push(4);
+    try array.push(0x04);
     try std.testing.expectEqual(@as(usize, 2), array.len());
-    try std.testing.expectEqual(@as(u8, 1), array.at(0).?);
-    try std.testing.expectEqual(@as(u8, 4), array.at(1).?);
+    try std.testing.expectEqual(@as(u8, 0x01), array.at(0).?);
+    try std.testing.expectEqual(@as(u8, 0x04), array.at(1).?);
 }
