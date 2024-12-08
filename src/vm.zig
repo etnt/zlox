@@ -9,77 +9,67 @@ pub const InterpretResult = enum(u8) {
     INTERPRET_RUNTIME_ERROR,
 };
 
-// Stack size should be large enough for most operations but not excessive
-const STACK_MAX = 256;
-
 pub const VM = struct {
     chunk: *Chunk,           // Chunk to interpret
     ip: [*]u8,              // Instruction pointer
     trace: bool = false,     // Enable tracing
+    allocator: std.mem.Allocator, // Allocator for dynamic memory
 
-    stack: [STACK_MAX]Value, // Fixed-size stack array
-    stack_top: usize,        // Points to next free slot
-
+    stack: std.ArrayList(Value), // Dynamic stack
+    
     /// Initialize a new VM with a pre-existing chunk
-    pub fn init(chunk: *Chunk, trace: bool) VM {
+    pub fn init(chunk: *Chunk, trace: bool, allocator: std.mem.Allocator) VM {
         return VM{
             .chunk = chunk,
             .ip = chunk.code.bytes.items.ptr,
             .trace = trace,
-            .stack = undefined,
-            .stack_top = 0,
+            .allocator = allocator,
+            .stack = std.ArrayList(Value).init(allocator),
         };
     }
 
     /// Free the VM (does not free the chunk as it's managed elsewhere)
     pub fn deinit(self: *VM) void {
-        // The chunk is owned and freed elsewhere
+        self.stack.deinit();
         self.* = undefined;
     }
 
     /// Reset the stack
     pub fn resetStack(self: *VM) void {
-        self.stack_top = 0;
+        self.stack.clearRetainingCapacity();
     }
 
     /// Push a value onto the stack
     pub fn push(self: *VM, value: Value) !void {
-        if (self.stack_top >= STACK_MAX) {
-            return error.StackOverflow;
-        }
-        self.stack[self.stack_top] = value;
-        self.stack_top += 1;
+        try self.stack.append(value);
     }
 
     /// Pop a value from the stack
     pub fn pop(self: *VM) !Value {
-        if (self.stack_top == 0) {
+        if (self.stack.items.len == 0) {
             return error.StackUnderflow;
         }
-        self.stack_top -= 1;
-        return self.stack[self.stack_top];
+        return self.stack.pop();
     }
 
     /// Peek at the top value without removing it
     pub fn peek(self: *VM, distance: usize) !Value {
-        const index = self.stack_top - 1 - distance;
-        if (index >= self.stack_top) {
+        if (distance >= self.stack.items.len) {
             return error.StackUnderflow;
         }
-        return self.stack[index];
+        return self.stack.items[self.stack.items.len - 1 - distance];
     }
 
     /// Print the current contents of the stack
     pub fn printStack(self: *VM) void {
         std.debug.print("          ", .{});
-        if (self.stack_top == 0) {
+        if (self.stack.items.len == 0) {
             std.debug.print("[]", .{});
         } else {
             std.debug.print("[ ", .{});
-            var i: usize = 0;
-            while (i < self.stack_top) : (i += 1) {
+            for (self.stack.items, 0..) |value, i| {
                 if (i > 0) std.debug.print("| ", .{});
-                std.debug.print("{d} ", .{self.stack[i]});
+                std.debug.print("{d} ", .{value});
             }
             std.debug.print("]", .{});
         }
@@ -170,10 +160,8 @@ pub const VM = struct {
                     };
                 },
                 OpCode.RETURN => {
-                    _ = self.pop() catch |err| {
-                        std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
-                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
-                    };
+                    // Don't pop the final value, just return success
+                    // This allows tests to examine the final result
                     return InterpretResult.INTERPRET_OK;
                 },
                 else => {

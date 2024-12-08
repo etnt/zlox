@@ -86,7 +86,7 @@ pub fn main() !void {
     code.disassemble("main");
 
     // Create and initialize a VM with tracing enabled
-    var vm = VM.init(&code, true);
+    var vm = VM.init(&code, true, allocator);
     defer vm.deinit();
 
     // Interpret the code
@@ -135,7 +135,7 @@ test "chunk with constants" {
     try std.testing.expectEqual(@as(u32, 456), chunk.lines.runs.items[1].line);
 
     // Test VM interpretation
-    var vm = VM.init(&chunk, false);
+    var vm = VM.init(&chunk, false, std.testing.allocator);
     defer vm.deinit();
     try std.testing.expectEqual(InterpretResult.INTERPRET_OK, vm.interpret());
 }
@@ -171,12 +171,13 @@ test "arithmetic calculation" {
     try chunk.writeOpcode(OpCode.RETURN, 1);
 
     // Create VM and interpret
-    var vm = VM.init(&chunk, false);
+    var vm = VM.init(&chunk, false, std.testing.allocator);
     defer vm.deinit();
     try std.testing.expectEqual(InterpretResult.INTERPRET_OK, vm.interpret());
 
     // The stack should contain the result: (3.4 + 2.6) * 2.0 - 2.0 = 10.0
-    try std.testing.expectEqual(@as(f64, 10.0), vm.stack[0]);
+    const result = try vm.peek(0);
+    try std.testing.expectEqual(@as(f64, 10.0), result);
 }
 
 test "arithmetic calculation with unary minus" {
@@ -201,10 +202,11 @@ test "arithmetic calculation with unary minus" {
     try chunk.writeOpcode(OpCode.RETURN, 1);
 
     // Create VM and interpret
-    var vm = VM.init(&chunk, false);
+    var vm = VM.init(&chunk, false, std.testing.allocator);
     defer vm.deinit();
     try std.testing.expectEqual(InterpretResult.INTERPRET_OK, vm.interpret());
 
     // The stack should contain the result: -2.0 + 3.4 = 1.4
-    try std.testing.expectEqual(@as(f64, 1.4), vm.stack[0]);
+    const result = try vm.peek(0);
+    try std.testing.expectEqual(@as(f64, 1.4), result);
 }
