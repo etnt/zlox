@@ -3,6 +3,8 @@ const root = @import("root.zig");
 const OpCode = root.OpCode;
 const Chunk = root.Chunk;
 const VM = root.VM;
+const vm_mod = @import("vm.zig");
+const InterpretResult = vm_mod.InterpretResult;
 
 pub fn main() !void {
     // Get a general purpose allocator
@@ -15,7 +17,7 @@ pub fn main() !void {
     defer chunk.deinit();
 
     // Add some constants to our chunk
-    const const1 = try chunk.addConstant(1.2);
+    const const1 = try chunk.addConstant(2.0);
     const const2 = try chunk.addConstant(3.4);
 
     // Write a sequence of opcodes with line numbers that demonstrate run-length encoding:
@@ -45,12 +47,50 @@ pub fn main() !void {
         std.debug.print("Run {d}: {d} instructions from line {d}\n", .{ i + 1, run.count, run.line });
     }
 
+    // ---------------------------------------------------------------------------------------------
+    // Test VM interpretation
+    // ---------------------------------------------------------------------------------------------
+
+    // Create a new chunk that can store both opcodes and constants
+    var code = Chunk.init(allocator);
+    defer code.deinit();
+
+    // Add some constants to our code
+    const c1 = try code.addConstant(2.0);
+    const c2 = try code.addConstant(3.4);
+    const c3 = try code.addConstant(2.6);
+
+    // Setup: (X + Y) * Z
+    try code.writeOpcode(OpCode.CONSTANT, 2020);
+    try code.writeByte(@intCast(c2), 2020);
+
+    try code.writeOpcode(OpCode.CONSTANT, 2020);
+    try code.writeByte(@intCast(c3), 2020);
+
+    try code.writeOpcode(OpCode.ADD, 2020);
+
+    try code.writeOpcode(OpCode.CONSTANT, 2020);
+    try code.writeByte(@intCast(c1), 2020);
+
+    try code.writeOpcode(OpCode.MUL, 2020);
+
+    try code.writeOpcode(OpCode.CONSTANT, 2020);
+    try code.writeByte(@intCast(c1), 2020);
+
+    try code.writeOpcode(OpCode.SUB, 2020);
+
+    try code.writeOpcode(OpCode.RETURN, 2021);
+
+    // Disassemble the chunk to see its contents
+    std.debug.print("\nCode Disassembly:\n", .{});
+    code.disassemble("main");
+
     // Create and initialize a VM with tracing enabled
-    var vm = VM.init(&chunk, true);
+    var vm = VM.init(&code, true);
     defer vm.deinit();
 
-    // Interpret the chunk
-    std.debug.print("\nInterpreting Chunk:\n", .{});
+    // Interpret the code
+    std.debug.print("\nInterpreting Code:\n", .{});
     const result = vm.interpret();
     std.debug.print("\nInterpretation result: {}\n", .{result});
 }
@@ -97,5 +137,74 @@ test "chunk with constants" {
     // Test VM interpretation
     var vm = VM.init(&chunk, false);
     defer vm.deinit();
-    try std.testing.expectEqual(root.InterpretResult.INTERPRET_OK, vm.interpret());
+    try std.testing.expectEqual(InterpretResult.INTERPRET_OK, vm.interpret());
+}
+
+test "arithmetic calculation" {
+    var chunk = Chunk.init(std.testing.allocator);
+    defer chunk.deinit();
+
+    // Add constants: 2.0, 3.4, 2.6
+    const c1 = try chunk.addConstant(2.0);
+    const c2 = try chunk.addConstant(3.4);
+    const c3 = try chunk.addConstant(2.6);
+
+    // Setup: (3.4 + 2.6) * 2.0
+    try chunk.writeOpcode(OpCode.CONSTANT, 1);
+    try chunk.writeByte(@intCast(c2), 1);
+
+    try chunk.writeOpcode(OpCode.CONSTANT, 1);
+    try chunk.writeByte(@intCast(c3), 1);
+
+    try chunk.writeOpcode(OpCode.ADD, 1);
+
+    try chunk.writeOpcode(OpCode.CONSTANT, 1);
+    try chunk.writeByte(@intCast(c1), 1);
+
+    try chunk.writeOpcode(OpCode.MUL, 1);
+
+    try chunk.writeOpcode(OpCode.CONSTANT, 1);
+    try chunk.writeByte(@intCast(c1), 1);
+
+    try chunk.writeOpcode(OpCode.SUB, 1);
+
+    try chunk.writeOpcode(OpCode.RETURN, 1);
+
+    // Create VM and interpret
+    var vm = VM.init(&chunk, false);
+    defer vm.deinit();
+    try std.testing.expectEqual(InterpretResult.INTERPRET_OK, vm.interpret());
+
+    // The stack should contain the result: (3.4 + 2.6) * 2.0 - 2.0 = 10.0
+    try std.testing.expectEqual(@as(f64, 10.0), vm.stack[0]);
+}
+
+test "arithmetic calculation with unary minus" {
+    var chunk = Chunk.init(std.testing.allocator);
+    defer chunk.deinit();
+
+    // Add constants: 2.0, 3.4, 2.6
+    const c1 = try chunk.addConstant(2.0);
+    const c2 = try chunk.addConstant(3.4);
+
+    // Setup: -2.0
+    try chunk.writeOpcode(OpCode.CONSTANT, 1);
+    try chunk.writeByte(@intCast(c1), 1);
+
+    try chunk.writeOpcode(OpCode.NEGATE, 1);
+
+    try chunk.writeOpcode(OpCode.CONSTANT, 1);
+    try chunk.writeByte(@intCast(c2), 1);
+
+    try chunk.writeOpcode(OpCode.ADD, 1);
+
+    try chunk.writeOpcode(OpCode.RETURN, 1);
+
+    // Create VM and interpret
+    var vm = VM.init(&chunk, false);
+    defer vm.deinit();
+    try std.testing.expectEqual(InterpretResult.INTERPRET_OK, vm.interpret());
+
+    // The stack should contain the result: -2.0 + 3.4 = 1.4
+    try std.testing.expectEqual(@as(f64, 1.4), vm.stack[0]);
 }

@@ -91,6 +91,22 @@ pub const VM = struct {
         return self.run();
     }
 
+    fn binary_op(self: *VM, comptime op: fn (Value, Value) Value) InterpretResult {
+        const right = self.pop() catch |err| {
+            std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+            return InterpretResult.INTERPRET_RUNTIME_ERROR;
+        };
+        const left = self.pop() catch |err| {
+            std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+            return InterpretResult.INTERPRET_RUNTIME_ERROR;
+        };
+        self.push(op(left, right)) catch |err| {
+            std.debug.print("Error pushing constant: {s}\n", .{@errorName(err)});
+            return InterpretResult.INTERPRET_RUNTIME_ERROR;
+        };
+        return InterpretResult.INTERPRET_OK;
+    }
+
     fn run(self: *VM) InterpretResult {
         while (true) {
             if (self.trace) {
@@ -110,6 +126,38 @@ pub const VM = struct {
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
                     self.ip += 1;
+                },
+                OpCode.ADD => {
+                    const result = self.binary_op(struct {
+                        fn op(a: Value, b: Value) Value {
+                            return a + b;
+                        }
+                    }.op);
+                    if (result != InterpretResult.INTERPRET_OK) return result;
+                },
+                OpCode.SUB => {
+                    const result = self.binary_op(struct {
+                        fn op(a: Value, b: Value) Value {
+                            return a - b;
+                        }
+                    }.op);
+                    if (result != InterpretResult.INTERPRET_OK) return result;
+                },
+                OpCode.MUL => {
+                    const result = self.binary_op(struct {
+                        fn op(a: Value, b: Value) Value {
+                            return a * b;
+                        }
+                    }.op);
+                    if (result != InterpretResult.INTERPRET_OK) return result;
+                },
+                OpCode.DIV => {
+                    const result = self.binary_op(struct {
+                        fn op(a: Value, b: Value) Value {
+                            return a / b;
+                        }
+                    }.op);
+                    if (result != InterpretResult.INTERPRET_OK) return result;
                 },
                 OpCode.NEGATE => {
                     const value = self.pop() catch |err| {
