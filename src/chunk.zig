@@ -1,21 +1,21 @@
 const std = @import("std");
 const ByteArray = @import("byte_array.zig").ByteArray;
 const ValueArray = @import("value.zig").ValueArray;
-const U32Array = @import("u32_array.zig").U32Array;
+const LineArray = @import("line_array.zig").LineArray;
 const OpCode = @import("opcodes.zig").OpCode;
 
 /// Chunk represents a sequence of bytecode instructions and their associated constant values
 pub const Chunk = struct {
     code: ByteArray,
     constants: ValueArray,
-    lines: U32Array, // Store line numbers for each instruction
+    lines: LineArray, // Store line numbers using run-length encoding
 
     /// Initialize a new Chunk with the given allocator
     pub fn init(allocator: std.mem.Allocator) Chunk {
         return Chunk{
             .code = ByteArray.init(allocator),
             .constants = ValueArray.init(allocator),
-            .lines = U32Array.init(allocator),
+            .lines = LineArray.init(allocator),
         };
     }
 
@@ -29,13 +29,13 @@ pub const Chunk = struct {
     /// Write an opcode to the chunk
     pub fn writeOpcode(self: *Chunk, op: u8, line: u32) !void {
         try self.code.push(op);
-        try self.lines.push(line);
+        try self.lines.add(line);
     }
 
     /// Write a byte to the chunk (used for operands)
     pub fn writeByte(self: *Chunk, byte: u8, line: u32) !void {
         try self.code.push(byte);
-        try self.lines.push(line);
+        try self.lines.add(line);
     }
 
     /// Add a constant to the chunk and return its index
@@ -46,13 +46,13 @@ pub const Chunk = struct {
     /// Print the contents of the chunk with both opcodes and constants
     pub fn disassemble(self: *const Chunk, name: []const u8) void {
         std.debug.print("== {s} ==\n\n", .{name});
-        std.debug.print("Address  Line OpCode           Value\n", .{});
+        std.debug.print("Address  Line OpCode            Value\n", .{});
         std.debug.print("-------- ---- ----------------- --------\n", .{});
 
         var offset: usize = 0;
         var last_line: u32 = 0;
         while (offset < self.code.len()) {
-            const current_line = self.lines.at(offset).?;
+            const current_line = self.lines.getLine(@intCast(offset)).?;
             if (current_line == last_line) {
                 std.debug.print("{d:0>4}        | ", .{offset});
             } else {
@@ -72,7 +72,7 @@ pub const Chunk = struct {
                 OpCode.CONSTANT => {
                     if (self.code.at(offset + 1)) |constant_index| {
                         if (self.constants.at(constant_index)) |constant_value| {
-                            std.debug.print("CONSTANT         {d} '{d}'\n", .{ constant_index, constant_value });
+                            std.debug.print("CONSTANT          {d} '{d}'\n", .{ constant_index, constant_value });
                             return offset + 2; // Skip the opcode and the constant index
                         }
                     }
@@ -112,13 +112,18 @@ test "Chunk - basic operations" {
 
     // Verify code length (should be 3: CONSTANT opcode + constant index + RETURN)
     try std.testing.expectEqual(@as(usize, 3), chunk.code.len());
-    try std.testing.expectEqual(@as(usize, 3), chunk.lines.len());
+    try std.testing.expectEqual(@as(u32, 3), chunk.lines.count());
 
     // Verify the constant value
     try std.testing.expectEqual(@as(f64, 1.2), chunk.constants.at(0).?);
 
     // Verify line numbers
-    try std.testing.expectEqual(@as(u32, 123), chunk.lines.at(0).?);
-    try std.testing.expectEqual(@as(u32, 123), chunk.lines.at(1).?);
-    try std.testing.expectEqual(@as(u32, 123), chunk.lines.at(2).?);
+    try std.testing.expectEqual(@as(u32, 123), chunk.lines.getLine(0).?);
+    try std.testing.expectEqual(@as(u32, 123), chunk.lines.getLine(1).?);
+    try std.testing.expectEqual(@as(u32, 123), chunk.lines.getLine(2).?);
+
+    // Verify we only created one run since all instructions are from the same line
+    try std.testing.expectEqual(@as(usize, 1), chunk.lines.runs.items.len);
+    try std.testing.expectEqual(@as(u32, 3), chunk.lines.runs.items[0].count);
+    try std.testing.expectEqual(@as(u32, 123), chunk.lines.runs.items[0].line);
 }

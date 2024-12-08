@@ -16,23 +16,35 @@ pub fn main() !void {
     // Add some constants to our chunk
     const const1 = try chunk.addConstant(1.2);
     const const2 = try chunk.addConstant(3.4);
-    const const3 = try chunk.addConstant(2.71828);
+    const const3 = try chunk.addConstant(5.6);
 
-    // Write a sequence of opcodes that will:
-    // 1. Load first constant (1.2)
-    // 2. Load second constant (3.4)
-    // 3. Return
+    // Write a sequence of opcodes with line numbers that demonstrate run-length encoding:
+    // Line 1234: Two instructions (CONSTANT 1.2)
     try chunk.writeOpcode(OpCode.CONSTANT, 1234);
-    try chunk.writeByte(@intCast(const1), 1234); // Index of first constant
-    try chunk.writeOpcode(OpCode.CONSTANT, 1234);
-    try chunk.writeByte(@intCast(const3), 1234); // Index of third constant
-    try chunk.writeOpcode(OpCode.CONSTANT, 5678);
-    try chunk.writeByte(@intCast(const2), 5678); // Index of second constant
-    try chunk.writeOpcode(OpCode.RETURN, 5678);
+    try chunk.writeByte(@intCast(const1), 1234);
+
+    // Line 4567: Three instructions (CONSTANT 3.4)
+    try chunk.writeOpcode(OpCode.CONSTANT, 4567);
+    try chunk.writeByte(@intCast(const2), 4567);
+
+    // Still line 4567: (CONSTANT 5.6)
+    try chunk.writeOpcode(OpCode.CONSTANT, 4567);
+    try chunk.writeByte(@intCast(const3), 4567);
+
+    // Back to line 1234: One instruction (RETURN)
+    try chunk.writeOpcode(OpCode.RETURN, 1234);
 
     // Disassemble the chunk to see its contents
     std.debug.print("\nChunk Disassembly:\n", .{});
     chunk.disassemble("main");
+
+    // Print information about the run-length encoding
+    std.debug.print("\nRun-Length Encoding Info:\n", .{});
+    std.debug.print("Total instructions: {d}\n", .{chunk.lines.count()});
+    std.debug.print("Number of runs: {d}\n", .{chunk.lines.runs.items.len});
+    for (chunk.lines.runs.items, 0..) |run, i| {
+        std.debug.print("Run {d}: {d} instructions from line {d}\n", .{ i + 1, run.count, run.line });
+    }
 }
 
 test "chunk with constants" {
@@ -46,24 +58,31 @@ test "chunk with constants" {
     try std.testing.expectEqual(@as(usize, 1), const2);
 
     // Write opcodes with their operands
-    try chunk.writeOpcode(OpCode.CONSTANT, 1234);
-    try chunk.writeByte(@intCast(const1), 1234);
-    try chunk.writeOpcode(OpCode.CONSTANT, 5678);
-    try chunk.writeByte(@intCast(const2), 5678);
-    try chunk.writeOpcode(OpCode.RETURN, 5678);
+    try chunk.writeOpcode(OpCode.CONSTANT, 123);
+    try chunk.writeByte(@intCast(const1), 123);
+    try chunk.writeOpcode(OpCode.CONSTANT, 456);
+    try chunk.writeByte(@intCast(const2), 456);
+    try chunk.writeOpcode(OpCode.RETURN, 456);
 
     // Verify code length (5 bytes total: CONSTANT + index1 + CONSTANT + index2 + RETURN)
     try std.testing.expectEqual(@as(usize, 5), chunk.code.len());
-    try std.testing.expectEqual(@as(usize, 5), chunk.lines.len());
+    try std.testing.expectEqual(@as(u32, 5), chunk.lines.count());
 
     // Verify constants
     try std.testing.expectEqual(@as(f64, 1.2), chunk.constants.at(0).?);
     try std.testing.expectEqual(@as(f64, 3.4), chunk.constants.at(1).?);
 
     // Verify line numbers
-    try std.testing.expectEqual(@as(u32, 1234), chunk.lines.at(0).?);
-    try std.testing.expectEqual(@as(u32, 1234), chunk.lines.at(1).?);
-    try std.testing.expectEqual(@as(u32, 5678), chunk.lines.at(2).?);
-    try std.testing.expectEqual(@as(u32, 5678), chunk.lines.at(3).?);
-    try std.testing.expectEqual(@as(u32, 5678), chunk.lines.at(4).?);
+    try std.testing.expectEqual(@as(u32, 123), chunk.lines.getLine(0).?);
+    try std.testing.expectEqual(@as(u32, 123), chunk.lines.getLine(1).?);
+    try std.testing.expectEqual(@as(u32, 456), chunk.lines.getLine(2).?);
+    try std.testing.expectEqual(@as(u32, 456), chunk.lines.getLine(3).?);
+    try std.testing.expectEqual(@as(u32, 456), chunk.lines.getLine(4).?);
+
+    // Verify run-length encoding
+    try std.testing.expectEqual(@as(usize, 2), chunk.lines.runs.items.len);
+    try std.testing.expectEqual(@as(u32, 2), chunk.lines.runs.items[0].count);
+    try std.testing.expectEqual(@as(u32, 123), chunk.lines.runs.items[0].line);
+    try std.testing.expectEqual(@as(u32, 3), chunk.lines.runs.items[1].count);
+    try std.testing.expectEqual(@as(u32, 456), chunk.lines.runs.items[1].line);
 }
