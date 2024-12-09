@@ -68,6 +68,30 @@ pub const Value = union(ValueType) {
             .boolean => null,
         };
     }
+
+    /// Logical AND operation
+    pub fn logicalAnd(a: Value, b: Value) ?Value {
+        if (a == .boolean and b == .boolean) {
+            return Value.boolean(a.boolean and b.boolean);
+        }
+        return null;
+    }
+
+    /// Logical OR operation
+    pub fn logicalOr(a: Value, b: Value) ?Value {
+        if (a == .boolean and b == .boolean) {
+            return Value.boolean(a.boolean or b.boolean);
+        }
+        return null;
+    }
+
+    /// Logical NOT operation
+    pub fn not(self: Value) ?Value {
+        return switch (self) {
+            .boolean => |b| Value.boolean(!b),
+            .number => null,
+        };
+    }
 };
 
 /// ValueArray provides a dynamic array implementation for constant values
@@ -144,7 +168,7 @@ test "ValueArray - basic operations" {
     try std.testing.expectEqual(@as(usize, 3), array.len());
 }
 
-test "Value - operations" {
+test "Value - arithmetic operations" {
     // Test number operations
     const a = Value.number(5.0);
     const b = Value.number(2.5);
@@ -172,4 +196,43 @@ test "Value - operations" {
     try std.testing.expectEqual(@as(?Value, null), Value.mul(a, c));
     try std.testing.expectEqual(@as(?Value, null), Value.div(a, c));
     try std.testing.expectEqual(@as(?Value, null), Value.negate(c));
+}
+
+test "Value - boolean operations" {
+    const t = Value.boolean(true);
+    const f = Value.boolean(false);
+    const n = Value.number(1.0);
+
+    // Test AND
+    if (Value.logicalAnd(t, t)) |result| {
+        try std.testing.expectEqual(true, result.boolean);
+    }
+    if (Value.logicalAnd(t, f)) |result| {
+        try std.testing.expectEqual(false, result.boolean);
+    }
+    if (Value.logicalAnd(f, f)) |result| {
+        try std.testing.expectEqual(false, result.boolean);
+    }
+    try std.testing.expectEqual(@as(?Value, null), Value.logicalAnd(t, n));
+
+    // Test OR
+    if (Value.logicalOr(t, t)) |result| {
+        try std.testing.expectEqual(true, result.boolean);
+    }
+    if (Value.logicalOr(t, f)) |result| {
+        try std.testing.expectEqual(true, result.boolean);
+    }
+    if (Value.logicalOr(f, f)) |result| {
+        try std.testing.expectEqual(false, result.boolean);
+    }
+    try std.testing.expectEqual(@as(?Value, null), Value.logicalOr(t, n));
+
+    // Test NOT
+    if (Value.not(t)) |result| {
+        try std.testing.expectEqual(false, result.boolean);
+    }
+    if (Value.not(f)) |result| {
+        try std.testing.expectEqual(true, result.boolean);
+    }
+    try std.testing.expectEqual(@as(?Value, null), Value.not(n));
 }

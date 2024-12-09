@@ -104,6 +104,24 @@ pub const VM = struct {
         }
     }
 
+    fn unary_op(self: *VM, comptime op: fn (Value) ?Value) InterpretResult {
+        const value = self.pop() catch |err| {
+            std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+            return InterpretResult.INTERPRET_RUNTIME_ERROR;
+        };
+        
+        if (op(value)) |result| {
+            self.push(result) catch |err| {
+                std.debug.print("Error pushing result: {s}\n", .{@errorName(err)});
+                return InterpretResult.INTERPRET_RUNTIME_ERROR;
+            };
+            return InterpretResult.INTERPRET_OK;
+        } else {
+            std.debug.print("Invalid operand type for unary operation\n", .{});
+            return InterpretResult.INTERPRET_RUNTIME_ERROR;
+        }
+    }
+
     fn run(self: *VM) InterpretResult {
         while (true) {
             if (self.trace) {
@@ -140,21 +158,21 @@ pub const VM = struct {
                     const result = self.binary_op(Value.div);
                     if (result != InterpretResult.INTERPRET_OK) return result;
                 },
+                OpCode.AND => {
+                    const result = self.binary_op(Value.logicalAnd);
+                    if (result != InterpretResult.INTERPRET_OK) return result;
+                },
+                OpCode.OR => {
+                    const result = self.binary_op(Value.logicalOr);
+                    if (result != InterpretResult.INTERPRET_OK) return result;
+                },
+                OpCode.NOT => {
+                    const result = self.unary_op(Value.not);
+                    if (result != InterpretResult.INTERPRET_OK) return result;
+                },
                 OpCode.NEGATE => {
-                    const value = self.pop() catch |err| {
-                        std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
-                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
-                    };
-                    
-                    if (value.negate()) |result| {
-                        self.push(result) catch |err| {
-                            std.debug.print("Error pushing negated value: {s}\n", .{@errorName(err)});
-                            return InterpretResult.INTERPRET_RUNTIME_ERROR;
-                        };
-                    } else {
-                        std.debug.print("Cannot negate a boolean value\n", .{});
-                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
-                    }
+                    const result = self.unary_op(Value.negate);
+                    if (result != InterpretResult.INTERPRET_OK) return result;
                 },
                 OpCode.RETURN => {
                     // Don't pop the final value, just return success

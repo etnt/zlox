@@ -98,6 +98,18 @@ pub const Chunk = struct {
                     std.debug.print("DIV\n", .{});
                     return offset + 1;
                 },
+                OpCode.AND => {
+                    std.debug.print("AND\n", .{});
+                    return offset + 1;
+                },
+                OpCode.OR => {
+                    std.debug.print("OR\n", .{});
+                    return offset + 1;
+                },
+                OpCode.NOT => {
+                    std.debug.print("NOT\n", .{});
+                    return offset + 1;
+                },
                 OpCode.NEGATE => {
                     std.debug.print("NEGATE\n", .{});
                     return offset + 1;
@@ -138,12 +150,17 @@ test "Chunk - basic operations" {
     try chunk.writeOpcode(OpCode.CONSTANT, 123);
     try chunk.writeByte(@intCast(bool_idx), 123);
 
+    // Write some boolean operations
+    try chunk.writeOpcode(OpCode.AND, 123);
+    try chunk.writeOpcode(OpCode.OR, 123);
+    try chunk.writeOpcode(OpCode.NOT, 123);
+
     // Write RETURN opcode
     try chunk.writeOpcode(OpCode.RETURN, 123);
 
-    // Verify code length (should be 5: CONSTANT + num_idx + CONSTANT + bool_idx + RETURN)
-    try std.testing.expectEqual(@as(usize, 5), chunk.code.len());
-    try std.testing.expectEqual(@as(u32, 5), chunk.lines.count());
+    // Verify code length
+    try std.testing.expectEqual(@as(usize, 8), chunk.code.len());
+    try std.testing.expectEqual(@as(u32, 8), chunk.lines.count());
 
     // Verify the constant values
     if (chunk.constants.at(0)) |val| {
@@ -159,9 +176,12 @@ test "Chunk - basic operations" {
     try std.testing.expectEqual(@as(u32, 123), chunk.lines.getLine(2).?);
     try std.testing.expectEqual(@as(u32, 123), chunk.lines.getLine(3).?);
     try std.testing.expectEqual(@as(u32, 123), chunk.lines.getLine(4).?);
+    try std.testing.expectEqual(@as(u32, 123), chunk.lines.getLine(5).?);
+    try std.testing.expectEqual(@as(u32, 123), chunk.lines.getLine(6).?);
+    try std.testing.expectEqual(@as(u32, 123), chunk.lines.getLine(7).?);
 
     // Verify we only created one run since all instructions are from the same line
     try std.testing.expectEqual(@as(usize, 1), chunk.lines.runs.items.len);
-    try std.testing.expectEqual(@as(u32, 5), chunk.lines.runs.items[0].count);
+    try std.testing.expectEqual(@as(u32, 8), chunk.lines.runs.items[0].count);
     try std.testing.expectEqual(@as(u32, 123), chunk.lines.runs.items[0].line);
 }

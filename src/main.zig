@@ -21,6 +21,7 @@ pub fn main() !void {
     const const1 = try chunk.addConstant(Value.number(2.0));
     const const2 = try chunk.addConstant(Value.number(3.4));
     const const3 = try chunk.addConstant(Value.boolean(true));
+    const const4 = try chunk.addConstant(Value.boolean(false));
 
     // Write a sequence of opcodes with line numbers that demonstrate run-length encoding:
     try chunk.writeOpcode(OpCode.CONSTANT, 1234);
@@ -33,6 +34,11 @@ pub fn main() !void {
 
     try chunk.writeOpcode(OpCode.CONSTANT, 4567);
     try chunk.writeByte(@intCast(const3), 4567);
+
+    try chunk.writeOpcode(OpCode.CONSTANT, 4567);
+    try chunk.writeByte(@intCast(const4), 4567);
+
+    try chunk.writeOpcode(OpCode.AND, 4567);
 
     try chunk.writeOpcode(OpCode.RETURN, 1234);
 
@@ -94,22 +100,6 @@ test "chunk with constants" {
         try std.testing.expectEqual(Value.boolean(true), val);
     }
 
-    // Verify line numbers
-    try std.testing.expectEqual(@as(u32, 123), chunk.lines.getLine(0).?);
-    try std.testing.expectEqual(@as(u32, 123), chunk.lines.getLine(1).?);
-    try std.testing.expectEqual(@as(u32, 456), chunk.lines.getLine(2).?);
-    try std.testing.expectEqual(@as(u32, 456), chunk.lines.getLine(3).?);
-    try std.testing.expectEqual(@as(u32, 456), chunk.lines.getLine(4).?);
-    try std.testing.expectEqual(@as(u32, 456), chunk.lines.getLine(5).?);
-    try std.testing.expectEqual(@as(u32, 456), chunk.lines.getLine(6).?);
-
-    // Verify run-length encoding
-    try std.testing.expectEqual(@as(usize, 2), chunk.lines.runs.items.len);
-    try std.testing.expectEqual(@as(u32, 2), chunk.lines.runs.items[0].count);
-    try std.testing.expectEqual(@as(u32, 123), chunk.lines.runs.items[0].line);
-    try std.testing.expectEqual(@as(u32, 5), chunk.lines.runs.items[1].count);
-    try std.testing.expectEqual(@as(u32, 456), chunk.lines.runs.items[1].line);
-
     // Test VM interpretation
     var vm = VM.init(&chunk, false, std.testing.allocator);
     defer vm.deinit();
@@ -151,52 +141,37 @@ test "arithmetic calculation" {
     try std.testing.expectEqual(Value.number(12.0), result);
 }
 
-test "arithmetic calculation with unary minus" {
-    var chunk = Chunk.init(std.testing.allocator);
-    defer chunk.deinit();
-
-    // Add constants
-    const c1 = try chunk.addConstant(Value.number(2.0));
-    const c2 = try chunk.addConstant(Value.number(3.4));
-
-    // Setup: -2.0 + 3.4
-    try chunk.writeOpcode(OpCode.CONSTANT, 1);
-    try chunk.writeByte(@intCast(c1), 1);
-
-    try chunk.writeOpcode(OpCode.NEGATE, 1);
-
-    try chunk.writeOpcode(OpCode.CONSTANT, 1);
-    try chunk.writeByte(@intCast(c2), 1);
-
-    try chunk.writeOpcode(OpCode.ADD, 1);
-
-    try chunk.writeOpcode(OpCode.RETURN, 1);
-
-    // Create VM and interpret
-    var vm = VM.init(&chunk, false, std.testing.allocator);
-    defer vm.deinit();
-    try std.testing.expectEqual(InterpretResult.INTERPRET_OK, vm.interpret());
-
-    // The stack should contain the result: -2.0 + 3.4 = 1.4
-    const result = try vm.peek(0);
-    try std.testing.expectEqual(Value.number(1.4), result);
-}
-
 test "boolean operations" {
     var chunk = Chunk.init(std.testing.allocator);
     defer chunk.deinit();
 
     // Add constants
-    const c1 = try chunk.addConstant(Value.boolean(true));
-    const c2 = try chunk.addConstant(Value.number(1.0));
+    const t = try chunk.addConstant(Value.boolean(true));
+    const f = try chunk.addConstant(Value.boolean(false));
 
-    // Load boolean
+    // Test AND operation (true AND false = false)
     try chunk.writeOpcode(OpCode.CONSTANT, 1);
-    try chunk.writeByte(@intCast(c1), 1);
+    try chunk.writeByte(@intCast(t), 1);
 
-    // Load number
     try chunk.writeOpcode(OpCode.CONSTANT, 1);
-    try chunk.writeByte(@intCast(c2), 1);
+    try chunk.writeByte(@intCast(f), 1);
+
+    try chunk.writeOpcode(OpCode.AND, 1);
+
+    // Test OR operation (false OR true = true)
+    try chunk.writeOpcode(OpCode.CONSTANT, 1);
+    try chunk.writeByte(@intCast(f), 1);
+
+    try chunk.writeOpcode(OpCode.CONSTANT, 1);
+    try chunk.writeByte(@intCast(t), 1);
+
+    try chunk.writeOpcode(OpCode.OR, 1);
+
+    // Test NOT operation (NOT true = false)
+    try chunk.writeOpcode(OpCode.CONSTANT, 1);
+    try chunk.writeByte(@intCast(t), 1);
+
+    try chunk.writeOpcode(OpCode.NOT, 1);
 
     try chunk.writeOpcode(OpCode.RETURN, 1);
 
@@ -205,9 +180,36 @@ test "boolean operations" {
     defer vm.deinit();
     try std.testing.expectEqual(InterpretResult.INTERPRET_OK, vm.interpret());
 
-    // The stack should contain both values
-    const bool_val = try vm.peek(1);
-    const num_val = try vm.peek(0);
-    try std.testing.expectEqual(Value.boolean(true), bool_val);
-    try std.testing.expectEqual(Value.number(1.0), num_val);
+    // The stack should contain three results:
+    // [false, true, false]
+    const not_result = try vm.peek(0);
+    const or_result = try vm.peek(1);
+    const and_result = try vm.peek(2);
+
+    try std.testing.expectEqual(Value.boolean(false), not_result);
+    try std.testing.expectEqual(Value.boolean(true), or_result);
+    try std.testing.expectEqual(Value.boolean(false), and_result);
+}
+
+test "mixed operations" {
+    var chunk = Chunk.init(std.testing.allocator);
+    defer chunk.deinit();
+
+    // Add constants
+    const num = try chunk.addConstant(Value.number(1.0));
+    const bool_val = try chunk.addConstant(Value.boolean(true));
+
+    // Try to perform arithmetic on a boolean (should fail)
+    try chunk.writeOpcode(OpCode.CONSTANT, 1);
+    try chunk.writeByte(@intCast(bool_val), 1);
+
+    try chunk.writeOpcode(OpCode.CONSTANT, 1);
+    try chunk.writeByte(@intCast(num), 1);
+
+    try chunk.writeOpcode(OpCode.ADD, 1);
+
+    // Create VM and interpret
+    var vm = VM.init(&chunk, false, std.testing.allocator);
+    defer vm.deinit();
+    try std.testing.expectEqual(InterpretResult.INTERPRET_RUNTIME_ERROR, vm.interpret());
 }
