@@ -69,7 +69,8 @@ pub const VM = struct {
             std.debug.print("[ ", .{});
             for (self.stack.items, 0..) |value, i| {
                 if (i > 0) std.debug.print("| ", .{});
-                std.debug.print("{d} ", .{value});
+                value.print();
+                std.debug.print(" ", .{});
             }
             std.debug.print("]", .{});
         }
@@ -81,7 +82,7 @@ pub const VM = struct {
         return self.run();
     }
 
-    fn binary_op(self: *VM, comptime op: fn (Value, Value) Value) InterpretResult {
+    fn binary_op(self: *VM, comptime op: fn (Value, Value) ?Value) InterpretResult {
         const right = self.pop() catch |err| {
             std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
@@ -90,11 +91,17 @@ pub const VM = struct {
             std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
         };
-        self.push(op(left, right)) catch |err| {
-            std.debug.print("Error pushing constant: {s}\n", .{@errorName(err)});
+        
+        if (op(left, right)) |result| {
+            self.push(result) catch |err| {
+                std.debug.print("Error pushing result: {s}\n", .{@errorName(err)});
+                return InterpretResult.INTERPRET_RUNTIME_ERROR;
+            };
+            return InterpretResult.INTERPRET_OK;
+        } else {
+            std.debug.print("Invalid operand types for binary operation\n", .{});
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
-        };
-        return InterpretResult.INTERPRET_OK;
+        }
     }
 
     fn run(self: *VM) InterpretResult {
@@ -118,45 +125,36 @@ pub const VM = struct {
                     self.ip += 1;
                 },
                 OpCode.ADD => {
-                    const result = self.binary_op(struct {
-                        fn op(a: Value, b: Value) Value {
-                            return a + b;
-                        }
-                    }.op);
+                    const result = self.binary_op(Value.add);
                     if (result != InterpretResult.INTERPRET_OK) return result;
                 },
                 OpCode.SUB => {
-                    const result = self.binary_op(struct {
-                        fn op(a: Value, b: Value) Value {
-                            return a - b;
-                        }
-                    }.op);
+                    const result = self.binary_op(Value.sub);
                     if (result != InterpretResult.INTERPRET_OK) return result;
                 },
                 OpCode.MUL => {
-                    const result = self.binary_op(struct {
-                        fn op(a: Value, b: Value) Value {
-                            return a * b;
-                        }
-                    }.op);
+                    const result = self.binary_op(Value.mul);
                     if (result != InterpretResult.INTERPRET_OK) return result;
                 },
                 OpCode.DIV => {
-                    const result = self.binary_op(struct {
-                        fn op(a: Value, b: Value) Value {
-                            return a / b;
-                        }
-                    }.op);
+                    const result = self.binary_op(Value.div);
                     if (result != InterpretResult.INTERPRET_OK) return result;
                 },
                 OpCode.NEGATE => {
-                    if (self.stack.items.len == 0) {
-                        std.debug.print("Stack underflow\n", .{});
+                    const value = self.pop() catch |err| {
+                        std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
+                    
+                    if (value.negate()) |result| {
+                        self.push(result) catch |err| {
+                            std.debug.print("Error pushing negated value: {s}\n", .{@errorName(err)});
+                            return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                        };
+                    } else {
+                        std.debug.print("Cannot negate a boolean value\n", .{});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     }
-                    // Negate the value in place at the top of the stack
-                    const last_idx = self.stack.items.len - 1;
-                    self.stack.items[last_idx] = -self.stack.items[last_idx];
                 },
                 OpCode.RETURN => {
                     // Don't pop the final value, just return success

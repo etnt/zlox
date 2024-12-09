@@ -1,6 +1,7 @@
 const std = @import("std");
 const ByteArray = @import("byte_array.zig").ByteArray;
 const ValueArray = @import("value.zig").ValueArray;
+const Value = @import("value.zig").Value;
 const LineArray = @import("line_array.zig").LineArray;
 const OpCode = @import("opcodes.zig").OpCode;
 
@@ -39,7 +40,7 @@ pub const Chunk = struct {
     }
 
     /// Add a constant to the chunk and return its index
-    pub fn addConstant(self: *Chunk, value: f64) !usize {
+    pub fn addConstant(self: *Chunk, value: Value) !usize {
         return self.constants.add(value);
     }
 
@@ -72,7 +73,9 @@ pub const Chunk = struct {
                 OpCode.CONSTANT => {
                     if (self.code.at(offset + 1)) |constant_index| {
                         if (self.constants.at(constant_index)) |constant_value| {
-                            std.debug.print("CONSTANT          {d} '{d}'\n", .{ constant_index, constant_value });
+                            std.debug.print("CONSTANT          {d} '", .{constant_index});
+                            constant_value.print();
+                            std.debug.print("'\n", .{});
                             return offset + 2; // Skip the opcode and the constant index
                         }
                     }
@@ -119,31 +122,46 @@ test "Chunk - basic operations" {
     var chunk = Chunk.init(std.testing.allocator);
     defer chunk.deinit();
 
-    // Add a constant and get its index
-    const const_idx = try chunk.addConstant(1.2);
-    try std.testing.expectEqual(@as(usize, 0), const_idx);
+    // Add a number constant and get its index
+    const num_idx = try chunk.addConstant(Value.number(1.2));
+    try std.testing.expectEqual(@as(usize, 0), num_idx);
 
-    // Write CONSTANT opcode followed by the constant index
+    // Add a boolean constant and get its index
+    const bool_idx = try chunk.addConstant(Value.boolean(true));
+    try std.testing.expectEqual(@as(usize, 1), bool_idx);
+
+    // Write CONSTANT opcode followed by the number constant index
     try chunk.writeOpcode(OpCode.CONSTANT, 123);
-    try chunk.writeByte(@intCast(const_idx), 123);
+    try chunk.writeByte(@intCast(num_idx), 123);
+
+    // Write CONSTANT opcode followed by the boolean constant index
+    try chunk.writeOpcode(OpCode.CONSTANT, 123);
+    try chunk.writeByte(@intCast(bool_idx), 123);
 
     // Write RETURN opcode
     try chunk.writeOpcode(OpCode.RETURN, 123);
 
-    // Verify code length (should be 3: CONSTANT opcode + constant index + RETURN)
-    try std.testing.expectEqual(@as(usize, 3), chunk.code.len());
-    try std.testing.expectEqual(@as(u32, 3), chunk.lines.count());
+    // Verify code length (should be 5: CONSTANT + num_idx + CONSTANT + bool_idx + RETURN)
+    try std.testing.expectEqual(@as(usize, 5), chunk.code.len());
+    try std.testing.expectEqual(@as(u32, 5), chunk.lines.count());
 
-    // Verify the constant value
-    try std.testing.expectEqual(@as(f64, 1.2), chunk.constants.at(0).?);
+    // Verify the constant values
+    if (chunk.constants.at(0)) |val| {
+        try std.testing.expectEqual(@as(f64, 1.2), val.number);
+    }
+    if (chunk.constants.at(1)) |val| {
+        try std.testing.expectEqual(true, val.boolean);
+    }
 
     // Verify line numbers
     try std.testing.expectEqual(@as(u32, 123), chunk.lines.getLine(0).?);
     try std.testing.expectEqual(@as(u32, 123), chunk.lines.getLine(1).?);
     try std.testing.expectEqual(@as(u32, 123), chunk.lines.getLine(2).?);
+    try std.testing.expectEqual(@as(u32, 123), chunk.lines.getLine(3).?);
+    try std.testing.expectEqual(@as(u32, 123), chunk.lines.getLine(4).?);
 
     // Verify we only created one run since all instructions are from the same line
     try std.testing.expectEqual(@as(usize, 1), chunk.lines.runs.items.len);
-    try std.testing.expectEqual(@as(u32, 3), chunk.lines.runs.items[0].count);
+    try std.testing.expectEqual(@as(u32, 5), chunk.lines.runs.items[0].count);
     try std.testing.expectEqual(@as(u32, 123), chunk.lines.runs.items[0].line);
 }
