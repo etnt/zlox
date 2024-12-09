@@ -16,7 +16,7 @@ pub const VM = struct {
     allocator: std.mem.Allocator, // Allocator for dynamic memory
 
     stack: std.ArrayList(Value), // Dynamic stack
-    
+
     /// Initialize a new VM with a pre-existing chunk
     pub fn init(chunk: *Chunk, trace: bool, allocator: std.mem.Allocator) VM {
         return VM{
@@ -91,7 +91,7 @@ pub const VM = struct {
             std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
         };
-        
+
         if (op(left, right)) |result| {
             self.push(result) catch |err| {
                 std.debug.print("Error pushing result: {s}\n", .{@errorName(err)});
@@ -109,7 +109,7 @@ pub const VM = struct {
             std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
         };
-        
+
         if (op(value)) |result| {
             self.push(result) catch |err| {
                 std.debug.print("Error pushing result: {s}\n", .{@errorName(err)});
@@ -141,6 +141,18 @@ pub const VM = struct {
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
                     self.ip += 1;
+                },
+                OpCode.TRUE => {
+                    self.push(Value.boolean(true)) catch |err| {
+                        std.debug.print("Error pushing true: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
+                },
+                OpCode.FALSE => {
+                    self.push(Value.boolean(false)) catch |err| {
+                        std.debug.print("Error pushing false: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
                 },
                 OpCode.ADD => {
                     const result = self.binary_op(Value.add);

@@ -82,6 +82,14 @@ pub const Chunk = struct {
                     std.debug.print("CONSTANT         <error>\n", .{});
                     return offset + 2;
                 },
+                OpCode.TRUE => {
+                    std.debug.print("TRUE\n", .{});
+                    return offset + 1;
+                },
+                OpCode.FALSE => {
+                    std.debug.print("FALSE\n", .{});
+                    return offset + 1;
+                },
                 OpCode.ADD => {
                     std.debug.print("ADD\n", .{});
                     return offset + 1;
@@ -146,9 +154,9 @@ test "Chunk - basic operations" {
     try chunk.writeOpcode(OpCode.CONSTANT, 123);
     try chunk.writeByte(@intCast(num_idx), 123);
 
-    // Write CONSTANT opcode followed by the boolean constant index
-    try chunk.writeOpcode(OpCode.CONSTANT, 123);
-    try chunk.writeByte(@intCast(bool_idx), 123);
+    // Write TRUE and FALSE opcodes
+    try chunk.writeOpcode(OpCode.TRUE, 123);
+    try chunk.writeOpcode(OpCode.FALSE, 123);
 
     // Write some boolean operations
     try chunk.writeOpcode(OpCode.AND, 123);
@@ -158,7 +166,7 @@ test "Chunk - basic operations" {
     // Write RETURN opcode
     try chunk.writeOpcode(OpCode.RETURN, 123);
 
-    // Verify code length
+    // Verify code length (2 for CONSTANT+idx, 1 each for TRUE, FALSE, AND, OR, NOT, RETURN)
     try std.testing.expectEqual(@as(usize, 8), chunk.code.len());
     try std.testing.expectEqual(@as(u32, 8), chunk.lines.count());
 

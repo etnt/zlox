@@ -17,11 +17,9 @@ pub fn main() !void {
     var chunk = Chunk.init(allocator);
     defer chunk.deinit();
 
-    // Add some constants to our chunk
+    // Add number constants to our chunk
     const const1 = try chunk.addConstant(Value.number(2.0));
     const const2 = try chunk.addConstant(Value.number(3.4));
-    const const3 = try chunk.addConstant(Value.boolean(true));
-    const const4 = try chunk.addConstant(Value.boolean(false));
 
     // Write a sequence of opcodes with line numbers that demonstrate run-length encoding:
     try chunk.writeOpcode(OpCode.CONSTANT, 1234);
@@ -31,13 +29,11 @@ pub fn main() !void {
     try chunk.writeByte(@intCast(const2), 4567);
 
     try chunk.writeOpcode(OpCode.NEGATE, 4567);
+    try chunk.writeOpcode(OpCode.ADD, 4567);
 
-    try chunk.writeOpcode(OpCode.CONSTANT, 4567);
-    try chunk.writeByte(@intCast(const3), 4567);
-
-    try chunk.writeOpcode(OpCode.CONSTANT, 4567);
-    try chunk.writeByte(@intCast(const4), 4567);
-
+    // Use TRUE and FALSE opcodes directly
+    try chunk.writeOpcode(OpCode.TRUE, 4567);
+    try chunk.writeOpcode(OpCode.FALSE, 4567);
     try chunk.writeOpcode(OpCode.AND, 4567);
 
     try chunk.writeOpcode(OpCode.RETURN, 1234);
@@ -68,26 +64,23 @@ test "chunk with constants" {
     var chunk = Chunk.init(std.testing.allocator);
     defer chunk.deinit();
 
-    // Add constants
+    // Add number constants
     const const1 = try chunk.addConstant(Value.number(1.2));
     const const2 = try chunk.addConstant(Value.number(3.4));
-    const const3 = try chunk.addConstant(Value.boolean(true));
     try std.testing.expectEqual(@as(usize, 0), const1);
     try std.testing.expectEqual(@as(usize, 1), const2);
-    try std.testing.expectEqual(@as(usize, 2), const3);
 
     // Write opcodes with their operands
     try chunk.writeOpcode(OpCode.CONSTANT, 123);
     try chunk.writeByte(@intCast(const1), 123);
     try chunk.writeOpcode(OpCode.CONSTANT, 456);
     try chunk.writeByte(@intCast(const2), 456);
-    try chunk.writeOpcode(OpCode.CONSTANT, 456);
-    try chunk.writeByte(@intCast(const3), 456);
+    try chunk.writeOpcode(OpCode.TRUE, 456);  // Use TRUE opcode directly
     try chunk.writeOpcode(OpCode.RETURN, 456);
 
-    // Verify code length (7 bytes total)
-    try std.testing.expectEqual(@as(usize, 7), chunk.code.len());
-    try std.testing.expectEqual(@as(u32, 7), chunk.lines.count());
+    // Verify code length (6 bytes total: 2 for each CONSTANT+idx, 1 for TRUE, 1 for RETURN)
+    try std.testing.expectEqual(@as(usize, 6), chunk.code.len());
+    try std.testing.expectEqual(@as(u32, 6), chunk.lines.count());
 
     // Verify constants
     if (chunk.constants.at(0)) |val| {
@@ -95,9 +88,6 @@ test "chunk with constants" {
     }
     if (chunk.constants.at(1)) |val| {
         try std.testing.expectEqual(Value.number(3.4), val);
-    }
-    if (chunk.constants.at(2)) |val| {
-        try std.testing.expectEqual(Value.boolean(true), val);
     }
 
     // Test VM interpretation
@@ -145,32 +135,18 @@ test "boolean operations" {
     var chunk = Chunk.init(std.testing.allocator);
     defer chunk.deinit();
 
-    // Add constants
-    const t = try chunk.addConstant(Value.boolean(true));
-    const f = try chunk.addConstant(Value.boolean(false));
-
     // Test AND operation (true AND false = false)
-    try chunk.writeOpcode(OpCode.CONSTANT, 1);
-    try chunk.writeByte(@intCast(t), 1);
-
-    try chunk.writeOpcode(OpCode.CONSTANT, 1);
-    try chunk.writeByte(@intCast(f), 1);
-
+    try chunk.writeOpcode(OpCode.TRUE, 1);
+    try chunk.writeOpcode(OpCode.FALSE, 1);
     try chunk.writeOpcode(OpCode.AND, 1);
 
     // Test OR operation (false OR true = true)
-    try chunk.writeOpcode(OpCode.CONSTANT, 1);
-    try chunk.writeByte(@intCast(f), 1);
-
-    try chunk.writeOpcode(OpCode.CONSTANT, 1);
-    try chunk.writeByte(@intCast(t), 1);
-
+    try chunk.writeOpcode(OpCode.FALSE, 1);
+    try chunk.writeOpcode(OpCode.TRUE, 1);
     try chunk.writeOpcode(OpCode.OR, 1);
 
     // Test NOT operation (NOT true = false)
-    try chunk.writeOpcode(OpCode.CONSTANT, 1);
-    try chunk.writeByte(@intCast(t), 1);
-
+    try chunk.writeOpcode(OpCode.TRUE, 1);
     try chunk.writeOpcode(OpCode.NOT, 1);
 
     try chunk.writeOpcode(OpCode.RETURN, 1);
@@ -195,17 +171,13 @@ test "mixed operations" {
     var chunk = Chunk.init(std.testing.allocator);
     defer chunk.deinit();
 
-    // Add constants
+    // Add number constant
     const num = try chunk.addConstant(Value.number(1.0));
-    const bool_val = try chunk.addConstant(Value.boolean(true));
 
     // Try to perform arithmetic on a boolean (should fail)
-    try chunk.writeOpcode(OpCode.CONSTANT, 1);
-    try chunk.writeByte(@intCast(bool_val), 1);
-
+    try chunk.writeOpcode(OpCode.TRUE, 1);
     try chunk.writeOpcode(OpCode.CONSTANT, 1);
     try chunk.writeByte(@intCast(num), 1);
-
     try chunk.writeOpcode(OpCode.ADD, 1);
 
     // Create VM and interpret

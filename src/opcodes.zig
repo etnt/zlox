@@ -10,6 +10,8 @@ pub const OpCode = struct {
     pub const OR: u8       = 0x08;    // Logical OR two values
     pub const NOT: u8      = 0x09;    // Logical NOT a value
     pub const RETURN: u8   = 0x0A;    // Return from function
+    pub const TRUE: u8     = 0x0B;    // Push true onto the stack
+    pub const FALSE: u8    = 0x0C;    // Push false onto the stack
 
     // Convert opcode value to name
     pub fn getName(code: u8) []const u8 {
@@ -24,6 +26,8 @@ pub const OpCode = struct {
             AND => "AND",
             OR => "OR",
             NOT => "NOT",
+            TRUE => "TRUE",
+            FALSE => "FALSE",
             else => "UNKNOWN",
         };
     }
@@ -41,5 +45,7 @@ test "opcode names" {
     try std.testing.expectEqualStrings("OR", OpCode.getName(OpCode.OR));
     try std.testing.expectEqualStrings("NOT", OpCode.getName(OpCode.NOT));
     try std.testing.expectEqualStrings("RETURN", OpCode.getName(OpCode.RETURN));
+    try std.testing.expectEqualStrings("TRUE", OpCode.getName(OpCode.TRUE));
+    try std.testing.expectEqualStrings("FALSE", OpCode.getName(OpCode.FALSE));
     try std.testing.expectEqualStrings("UNKNOWN", OpCode.getName(0xFF));
 }
