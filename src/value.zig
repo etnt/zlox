@@ -138,11 +138,20 @@ pub const Value = union(ValueType) {
 
     /// Check if two values are equal
     pub fn equals(a: Value, b: Value) bool {
-        if (a != b) return false;
         return switch (a) {
-            .number => |n| n == b.number,
-            .boolean => |bool_a| bool_a == b.boolean,
-            .object => |obj_a| obj_a == b.object,
+            .number => |n| b == .number and n == b.number,
+            .boolean => |bool_a| b == .boolean and bool_a == b.boolean,
+            .string => |str_a| {
+                if (b != .string) return false;
+                const str_b = b.string;
+                // Handle null cases
+                if (str_a == null and str_b == null) return true;
+                if (str_a == null or str_b == null) return false;
+                // Both strings are non-null, safe to access fields
+                return str_a.?.length == str_b.?.length and 
+                       std.mem.eql(u8, str_a.?.chars, str_b.?.chars);
+            },
+            .object => |obj_a| b == .object and obj_a == b.object,
         };
     }
 };
@@ -150,16 +159,29 @@ pub const Value = union(ValueType) {
 /// ValueArray provides a dynamic array implementation for constant values
 pub const ValueArray = struct {
     values: std.ArrayList(Value),
+    allocator: std.mem.Allocator,
 
     /// Initialize a new ValueArray with the given allocator
     pub fn init(allocator: std.mem.Allocator) ValueArray {
         return ValueArray{
             .values = std.ArrayList(Value).init(allocator),
+            .allocator = allocator,
         };
     }
 
     /// Free the memory used by the ValueArray
     pub fn deinit(self: *ValueArray) void {
+        // Clean up any string objects before freeing the array
+        for (self.values.items) |value| {
+            switch (value) {
+                .string => |str| {
+                    if (str) |str_ptr| {
+                        str_ptr.deinit(self.allocator);
+                    }
+                },
+                else => {},
+            }
+        }
         self.values.deinit();
     }
 
@@ -304,4 +326,11 @@ test "Value - string operations" {
         try std.testing.expectEqual(5, str_ptr.length);
         try std.testing.expectEqualStrings("hello", str_ptr.chars);
     }
+
+    const str_val2 = try Value.createString(allocator, "Hello");
+    defer if (str_val2.string) |str_ptr2| {
+        str_ptr2.deinit(allocator);
+    };
+    try std.testing.expectEqual(false, Value.equals(str_val, str_val2));
+
 }
