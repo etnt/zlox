@@ -13,12 +13,12 @@ pub const InterpretResult = enum(u8) {
 };
 
 pub const VM = struct {
-    chunk: *Chunk,           // Chunk to interpret
-    ip: [*]u8,              // Instruction pointer
-    trace: bool = false,     // Enable tracing
-    allocator: std.mem.Allocator, // Allocator for dynamic memory
-
-    stack: std.ArrayList(Value), // Dynamic stack
+    chunk: *Chunk,                      // Chunk to interpret
+    ip: [*]u8,                          // Instruction pointer
+    trace: bool = false,                // Enable tracing
+    allocator: std.mem.Allocator,       // Allocator for dynamic memory
+    stack: std.ArrayList(Value),        // Dynamic stack
+    globals: std.StringHashMap(Value),  // Global variables
 
     /// Initialize a new VM with a pre-existing chunk
     pub fn init(chunk: *Chunk, trace: bool, allocator: std.mem.Allocator) VM {
@@ -28,6 +28,7 @@ pub const VM = struct {
             .trace = trace,
             .allocator = allocator,
             .stack = std.ArrayList(Value).init(allocator),
+            .globals = std.StringHashMap(Value).init(allocator),
         };
     }
 
@@ -48,6 +49,24 @@ pub const VM = struct {
             }
         }
         self.stack.deinit();
+
+        // Clean up globals
+        var it = self.globals.iterator();
+        while (it.next()) |entry| {
+            switch (entry.value_ptr.*) {
+                .string => |str| {
+                    if (str) |str_ptr| {
+                        // Only free strings that are not constants
+                        if (!self.chunk.constants.contains(entry.value_ptr.*)) {
+                            str_ptr.deinit(self.allocator);
+                        }
+                    }
+                },
+                else => {},
+            }
+        }
+        self.globals.deinit();
+
         obj.deinitInternPool();
         self.* = undefined;
     }
@@ -107,6 +126,22 @@ pub const VM = struct {
             std.debug.print("]", .{});
         }
         std.debug.print("\n", .{});
+    }
+
+    pub fn printGlobals(self: *VM) void {
+        std.debug.print("          ", .{});
+        var it = self.globals.iterator();
+        var first = true;
+        std.debug.print("[ ", .{});
+        while (it.next()) |entry| {
+            if (!first) {
+                std.debug.print("| ", .{});
+            }
+            std.debug.print("{s}: ", .{entry.key_ptr.*});
+            entry.value_ptr.print();
+            first = false;
+        }
+        std.debug.print(" ]\n", .{});
     }
 
     pub fn interpret(self: *VM) InterpretResult {
@@ -186,6 +221,13 @@ pub const VM = struct {
             self.ip += 1;
 
             switch (opcode) {
+                OpCode.NIL => {
+                    self.push(Value.nil()) catch |err| {
+                        std.debug.print("Error pushing nil: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
+
+                },
                 OpCode.CONSTANT => {
                     self.push(self.chunk.constants.at(self.ip[0]).?) catch |err| {
                         std.debug.print("Error pushing constant: {s}\n", .{@errorName(err)});
@@ -256,6 +298,48 @@ pub const VM = struct {
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
                     try self.freeValue(value);
+                },
+                OpCode.DEFINE_GLOBAL => {
+                    const name = self.pop() catch |err| {
+                        std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
+                    if (name == .string) {
+                        if (name.string) |str_ptr| {
+                            const value = self.pop() catch |err| {
+                                std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+                                return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                            };
+                            self.globals.put(str_ptr.chars, value) catch |err| {
+                                std.debug.print("Error putting value in global map: {s}\n", .{@errorName(err)});
+                                return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                            };
+                        }
+                    } else {
+                        std.debug.print("Invalid operand type for DEFINE_GLOBAL\n", .{});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    }
+                },
+                OpCode.SET_GLOBAL => {
+                    const name = self.pop() catch |err| {
+                        std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
+                    if (name == .string) {
+                        if (name.string) |str_ptr| {
+                            const value = self.pop() catch |err| {
+                                std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+                                return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                            };
+                            self.globals.put(str_ptr.chars, value) catch |err| {
+                                std.debug.print("Error putting value in global map: {s}\n", .{@errorName(err)});
+                                return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                            };
+                        }
+                    } else {
+                        std.debug.print("Invalid operand type for SET_GLOBAL\n", .{});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    }
                 },
                 else => {
                     std.debug.print("Unknown opcode {d}\n", .{opcode});

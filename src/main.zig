@@ -6,6 +6,7 @@ const VM = root.VM;
 const Value = @import("value.zig").Value;
 const vm_mod = @import("vm.zig");
 const InterpretResult = vm_mod.InterpretResult;
+const obj = @import("object.zig");
 
 pub fn main() !void {
     // Get a general purpose allocator
@@ -42,12 +43,26 @@ pub fn main() !void {
     try chunk.writeOpcode(OpCode.AND, 4567);
 
     // Concatenate two strings
-    try chunk.writeOpcode(OpCode.CONSTANT, 9998);
-    try chunk.writeByte(@intCast(hello), 9998);
-    try chunk.writeOpcode(OpCode.CONSTANT, 9998);
-    try chunk.writeByte(@intCast(world), 9998);
-    try chunk.writeOpcode(OpCode.ADD, 9998);
-    try chunk.writeOpcode(OpCode.PRINT, 9999);
+    try chunk.writeOpcode(OpCode.CONSTANT, 5998);
+    try chunk.writeByte(@intCast(hello), 5998);
+    try chunk.writeOpcode(OpCode.CONSTANT, 5998);
+    try chunk.writeByte(@intCast(world), 5998);
+    try chunk.writeOpcode(OpCode.ADD, 5998);
+    try chunk.writeOpcode(OpCode.PRINT, 5999);
+
+    // Global variable: myvar = null
+    const myvar = try chunk.addConstant(try Value.createString(allocator, "myvar"));
+    const e = try chunk.addConstant(Value.number(2.71828));
+    try chunk.writeOpcode(OpCode.NIL, 6060);           // the value is null
+    try chunk.writeOpcode(OpCode.CONSTANT, 6060);      // the name is a constant
+    try chunk.writeByte(@intCast(myvar), 6060);      // the name of the variable
+    try chunk.writeOpcode(OpCode.DEFINE_GLOBAL, 6060); // define the global variable
+    // Assign value to the global variable: myvar = 2.71828
+    try chunk.writeOpcode(OpCode.CONSTANT, 6061);
+    try chunk.writeByte(@intCast(e), 6061);
+    try chunk.writeOpcode(OpCode.CONSTANT, 6061);
+    try chunk.writeByte(@intCast(myvar), 6061);
+    try chunk.writeOpcode(OpCode.SET_GLOBAL, 6061);
 
     try chunk.writeOpcode(OpCode.RETURN, 1234);
 
@@ -71,6 +86,46 @@ pub fn main() !void {
     std.debug.print("\nInterpreting Code:\n", .{});
     const result = vm.interpret();
     std.debug.print("\nInterpretation result: {}\n", .{result});
+
+    // Print the global variables
+    std.debug.print("\nGlobal Variables:\n", .{});
+    vm.printGlobals();
+}
+
+test "global variables" {
+    // Initialize with testing allocator
+    const allocator = std.testing.allocator;
+
+    // Clean up intern pool at the start and end of test
+    obj.deinitInternPool();
+    defer obj.deinitInternPool();
+
+    var chunk = Chunk.init(allocator);
+    defer chunk.deinit();
+
+    // Global variable: myvar = null
+    const myvar = try chunk.addConstant(try Value.createString(allocator, "myvar"));
+    const e = try chunk.addConstant(Value.number(2.71828));
+    try chunk.writeOpcode(OpCode.NIL, 6060);           // the value is null
+    try chunk.writeOpcode(OpCode.CONSTANT, 6060);      // the name is a constant
+    try chunk.writeByte(@intCast(myvar), 6060);      // the name of the variable
+    try chunk.writeOpcode(OpCode.DEFINE_GLOBAL, 6060); // define the global variable
+    // Assign value to the global variable: myvar = 2.71828
+    try chunk.writeOpcode(OpCode.CONSTANT, 6061);
+    try chunk.writeByte(@intCast(e), 6061);
+    try chunk.writeOpcode(OpCode.CONSTANT, 6061);
+    try chunk.writeByte(@intCast(myvar), 6061);
+    try chunk.writeOpcode(OpCode.SET_GLOBAL, 6061);
+
+    try chunk.writeOpcode(OpCode.RETURN, 6061);
+
+    // Create and initialize a VM with tracing enabled
+    var vm = VM.init(&chunk, false, allocator);
+    defer vm.deinit();
+
+    // Do VM interpretation and check global variable
+    try std.testing.expectEqual(InterpretResult.INTERPRET_OK, vm.interpret());
+    try std.testing.expectEqual(Value.number(2.71828), vm.globals.get("myvar").?);
 }
 
 test "chunk with constants" {

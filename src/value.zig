@@ -6,10 +6,11 @@ pub const Object = obj.Object;
 pub const String = obj.Object.String;
 
 /// ValueType represents the different types of values our VM can handle
-pub const ValueType = enum { number, boolean, object, string };
+pub const ValueType = enum { nil, number, boolean, object, string };
 
 /// Value represents a constant value in our bytecode
 pub const Value = union(ValueType) {
+    nil: void,
     number: f64,
     boolean: bool,
     object: ?*Object,
@@ -18,6 +19,7 @@ pub const Value = union(ValueType) {
     /// Print a value
     pub fn print(self: Value) void {
         switch (self) {
+            .nil => std.debug.print("nil", .{}),
             .number => |n| std.debug.print("{d}", .{n}),
             .boolean => |b| std.debug.print("{}", .{b}),
             .string => |s| {
@@ -44,6 +46,11 @@ pub const Value = union(ValueType) {
                 }
             },
         }
+    }
+
+    /// Create a null value
+    pub fn nil() Value {
+        return .{ .nil = {} };
     }
 
     /// Create a number value
@@ -124,6 +131,7 @@ pub const Value = union(ValueType) {
     pub fn negate(self: Value) ?Value {
         return switch (self) {
             .number => |n| Value.number(-n),
+            .nil, 
             .boolean, .string, .object => null,
         };
     }
@@ -150,7 +158,7 @@ pub const Value = union(ValueType) {
     pub fn not(self: Value) ?Value {
         return switch (self) {
             .boolean => |b| Value.boolean(!b),
-            .number, .string, .object => null,
+            .nil, .number, .string, .object => null,
         };
     }
 
@@ -158,6 +166,7 @@ pub const Value = union(ValueType) {
     pub fn equals(a: Value, b: Value) bool {
         if (@as(ValueType, a) != @as(ValueType, b)) return false;
         return switch (a) {
+            .nil => b.nil == {},
             .number => |n| b.number == n,
             .boolean => |bool_a| b.boolean == bool_a,
             .string => |str_a| {
@@ -175,6 +184,7 @@ pub const Value = union(ValueType) {
     /// Clone a value
     pub fn clone(self: Value, allocator: std.mem.Allocator) !Value {
         return switch (self) {
+            .nil => Value{ .nil = {} },
             .number => |n| Value{ .number = n },
             .boolean => |b| Value{ .boolean = b },
             .string => |s| if (s) |str| try createString(allocator, str.chars) else Value{ .string = null },

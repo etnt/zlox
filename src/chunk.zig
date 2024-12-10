@@ -70,6 +70,10 @@ pub const Chunk = struct {
     pub fn disassembleInstruction(self: *const Chunk, offset: usize) usize {
         if (self.code.at(offset)) |instruction| {
             switch (instruction) {
+                OpCode.NIL => {
+                    std.debug.print("NIL\n", .{});
+                    return offset + 1;
+                },
                 OpCode.CONSTANT => {
                     if (self.code.at(offset + 1)) |constant_index| {
                         if (self.constants.at(constant_index)) |constant_value| {
@@ -132,6 +136,14 @@ pub const Chunk = struct {
                 },
                 OpCode.POP => {
                     std.debug.print("POP\n", .{});
+                    return offset + 1;
+                },
+                OpCode.DEFINE_GLOBAL => {
+                    std.debug.print("DEFINE_GLOBAL\n", .{});
+                    return offset + 1;
+                },
+                OpCode.SET_GLOBAL => {
+                    std.debug.print("SET_GLOBAL\n", .{});
                     return offset + 1;
                 },
                 else => {
