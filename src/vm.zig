@@ -165,6 +165,14 @@ pub const VM = struct {
         }
     }
 
+    fn freeValue(self: *VM, value: Value) !void {
+        if (value == .string) {
+            if (value.string) |str_ptr| {
+                str_ptr.deinit(self.allocator);
+            }
+        }
+    }
+
     fn run(self: *VM) InterpretResult {
         while (true) {
             if (self.trace) {
@@ -233,6 +241,21 @@ pub const VM = struct {
                     // Don't pop the final value, just return success
                     // This allows tests to examine the final result
                     return InterpretResult.INTERPRET_OK;
+                },
+                OpCode.PRINT => {
+                    const value = self.pop() catch |err| {
+                        std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
+                    value.print();
+                    try self.freeValue(value);
+                },
+                OpCode.POP => {
+                    const value = self.pop() catch |err| {
+                        std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
+                    try self.freeValue(value);
                 },
                 else => {
                     std.debug.print("Unknown opcode {d}\n", .{opcode});

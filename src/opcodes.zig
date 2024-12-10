@@ -12,6 +12,8 @@ pub const OpCode = struct {
     pub const RETURN: u8   = 0x0A;    // Return from function
     pub const TRUE: u8     = 0x0B;    // Push true onto the stack
     pub const FALSE: u8    = 0x0C;    // Push false onto the stack
+    pub const PRINT: u8    = 0x0D;    // Print a value
+    pub const POP: u8      = 0x0E;    // Pop a value from the stack
 
     // Convert opcode value to name
     pub fn getName(code: u8) []const u8 {
@@ -28,6 +30,8 @@ pub const OpCode = struct {
             NOT => "NOT",
             TRUE => "TRUE",
             FALSE => "FALSE",
+            PRINT => "PRINT",
+            POP => "POP",
             else => "UNKNOWN",
         };
     }
@@ -47,5 +51,7 @@ test "opcode names" {
     try std.testing.expectEqualStrings("RETURN", OpCode.getName(OpCode.RETURN));
     try std.testing.expectEqualStrings("TRUE", OpCode.getName(OpCode.TRUE));
     try std.testing.expectEqualStrings("FALSE", OpCode.getName(OpCode.FALSE));
+    try std.testing.expectEqualStrings("PRINT", OpCode.getName(OpCode.PRINT));
+    try std.testing.expectEqualStrings("POP", OpCode.getName(OpCode.POP));
     try std.testing.expectEqualStrings("UNKNOWN", OpCode.getName(0xFF));
 }

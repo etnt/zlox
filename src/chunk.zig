@@ -126,6 +126,14 @@ pub const Chunk = struct {
                     std.debug.print("RETURN\n", .{});
                     return offset + 1;
                 },
+                OpCode.PRINT => {
+                    std.debug.print("PRINT\n", .{});
+                    return offset + 1;
+                },
+                OpCode.POP => {
+                    std.debug.print("POP\n", .{});
+                    return offset + 1;
+                },
                 else => {
                     std.debug.print("Unknown opcode {d}\n", .{instruction});
                     return offset + 1;

@@ -42,11 +42,12 @@ pub fn main() !void {
     try chunk.writeOpcode(OpCode.AND, 4567);
 
     // Concatenate two strings
-    try chunk.writeOpcode(OpCode.CONSTANT, 9999);
-    try chunk.writeByte(@intCast(hello), 9999);
-    try chunk.writeOpcode(OpCode.CONSTANT, 9999);
-    try chunk.writeByte(@intCast(world), 9999);
-    try chunk.writeOpcode(OpCode.ADD, 9999);
+    try chunk.writeOpcode(OpCode.CONSTANT, 9998);
+    try chunk.writeByte(@intCast(hello), 9998);
+    try chunk.writeOpcode(OpCode.CONSTANT, 9998);
+    try chunk.writeByte(@intCast(world), 9998);
+    try chunk.writeOpcode(OpCode.ADD, 9998);
+    try chunk.writeOpcode(OpCode.PRINT, 9999);
 
     try chunk.writeOpcode(OpCode.RETURN, 1234);
 
