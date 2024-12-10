@@ -3,8 +3,7 @@ const obj = @import("object.zig");
 
 pub const ObjectType = obj.ObjectType;
 pub const Object = obj.Object;
-pub const String = obj.Object.String; // Assuming String is nested in Object
-
+pub const String = obj.Object.String;
 
 /// ValueType represents the different types of values our VM can handle
 pub const ValueType = enum { number, boolean, object, string };
@@ -32,8 +31,6 @@ pub const Value = union(ValueType) {
                 if (o) |obj_ptr| {
                     switch (obj_ptr.type) {
                         .string => { 
-                            // Safe cast:  Check alignment before casting
-                            // Check if String's alignment is less than or equal to Object's alignment.
                             if (@alignOf(String) <= @alignOf(Object)) {
                                 const string_data: *String = @alignCast(obj_ptr);
                                 std.debug.print("{s}", .{string_data.chars});
@@ -41,7 +38,6 @@ pub const Value = union(ValueType) {
                                 std.debug.print("Alignment error: Cannot cast to String\n", .{});
                             }
                         },
-                        // Add other cases for other object types here
                     }
                 } else {
                     std.debug.print("null object", .{});
@@ -72,16 +68,34 @@ pub const Value = union(ValueType) {
     }
 
     /// Add two values
-    pub fn add(a: Value, b: Value) ?Value {
+    pub fn add(a: Value, b: Value, allocator: std.mem.Allocator) !?Value {
+        // Handle number addition
         if (a == .number and b == .number) {
             return Value.number(a.number + b.number);
         }
-        // String concatenation will be added later
+
+        // Handle string concatenation
+        if (a == .string and b == .string) {
+            const str_a = a.string orelse return null;
+            const str_b = b.string orelse return null;
+
+            // Create a new buffer for the concatenated string
+            var result = try allocator.alloc(u8, str_a.length + str_b.length);
+            defer allocator.free(result); // Free the temporary buffer after we're done with it
+
+            @memcpy(result[0..str_a.length], str_a.chars);
+            @memcpy(result[str_a.length..], str_b.chars);
+
+            // Create a new string object with the concatenated result
+            return try createString(allocator, result);
+        }
+
         return null;
     }
 
     /// Subtract two values
-    pub fn sub(a: Value, b: Value) ?Value {
+    pub fn sub(a: Value, b: Value, allocator: std.mem.Allocator) !?Value {
+        _ = allocator;
         if (a == .number and b == .number) {
             return Value.number(a.number - b.number);
         }
@@ -89,7 +103,8 @@ pub const Value = union(ValueType) {
     }
 
     /// Multiply two values
-    pub fn mul(a: Value, b: Value) ?Value {
+    pub fn mul(a: Value, b: Value, allocator: std.mem.Allocator) !?Value {
+        _ = allocator;
         if (a == .number and b == .number) {
             return Value.number(a.number * b.number);
         }
@@ -97,7 +112,8 @@ pub const Value = union(ValueType) {
     }
 
     /// Divide two values
-    pub fn div(a: Value, b: Value) ?Value {
+    pub fn div(a: Value, b: Value, allocator: std.mem.Allocator) !?Value {
+        _ = allocator;
         if (a == .number and b == .number) {
             return Value.number(a.number / b.number);
         }
@@ -113,7 +129,8 @@ pub const Value = union(ValueType) {
     }
 
     /// Logical AND operation
-    pub fn logicalAnd(a: Value, b: Value) ?Value {
+    pub fn logicalAnd(a: Value, b: Value, allocator: std.mem.Allocator) !?Value {
+        _ = allocator;
         if (a == .boolean and b == .boolean) {
             return Value.boolean(a.boolean and b.boolean);
         }
@@ -121,7 +138,8 @@ pub const Value = union(ValueType) {
     }
 
     /// Logical OR operation
-    pub fn logicalOr(a: Value, b: Value) ?Value {
+    pub fn logicalOr(a: Value, b: Value, allocator: std.mem.Allocator) !?Value {
+        _ = allocator;
         if (a == .boolean and b == .boolean) {
             return Value.boolean(a.boolean or b.boolean);
         }
@@ -138,11 +156,11 @@ pub const Value = union(ValueType) {
 
     /// Check if two values are equal
     pub fn equals(a: Value, b: Value) bool {
+        if (@as(ValueType, a) != @as(ValueType, b)) return false;
         return switch (a) {
-            .number => |n| b == .number and n == b.number,
-            .boolean => |bool_a| b == .boolean and bool_a == b.boolean,
+            .number => |n| b.number == n,
+            .boolean => |bool_a| b.boolean == bool_a,
             .string => |str_a| {
-                if (b != .string) return false;
                 const str_b = b.string;
                 // Handle null cases
                 if (str_a == null and str_b == null) return true;
@@ -151,7 +169,17 @@ pub const Value = union(ValueType) {
                 return str_a.?.length == str_b.?.length and 
                        std.mem.eql(u8, str_a.?.chars, str_b.?.chars);
             },
-            .object => |obj_a| b == .object and obj_a == b.object,
+            .object => |obj_a| b.object == obj_a,
+        };
+    }
+
+    /// Clone a value
+    pub fn clone(self: Value, allocator: std.mem.Allocator) !Value {
+        return switch (self) {
+            .number => |n| Value{ .number = n },
+            .boolean => |b| Value{ .boolean = b },
+            .string => |s| if (s) |str| try createString(allocator, str.chars) else Value{ .string = null },
+            .object => |o| Value{ .object = o },
         };
     }
 };
@@ -188,7 +216,9 @@ pub const ValueArray = struct {
     /// Add a value to the array and return its index
     pub fn add(self: *ValueArray, value: Value) !usize {
         const index = self.values.items.len;
-        try self.values.append(value);
+        // Clone the value before adding it to ensure we own it
+        const cloned = try value.clone(self.allocator);
+        try self.values.append(cloned);
         return index;
     }
 
@@ -201,6 +231,16 @@ pub const ValueArray = struct {
     /// Get the current length of the array
     pub fn len(self: *const ValueArray) usize {
         return self.values.items.len;
+    }
+
+    /// Check if a value exists in the array
+    pub fn contains(self: *const ValueArray, value: Value) bool {
+        for (self.values.items) |item| {
+            if (Value.equals(item, value)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// Print the contents of the array
@@ -248,28 +288,44 @@ test "Value - arithmetic operations" {
     const a = Value.number(5.0);
     const b = Value.number(2.5);
 
-    if (Value.add(a, b)) |result| {
-        try std.testing.expectEqual(result.number, 7.5);
-    }
-    if (Value.sub(a, b)) |result| {
-        try std.testing.expectEqual(result.number, 2.5);
-    }
-    if (Value.mul(a, b)) |result| {
-        try std.testing.expectEqual(result.number, 12.5);
-    }
-    if (Value.div(a, b)) |result| {
-        try std.testing.expectEqual(result.number, 2.0);
-    }
+    if (Value.add(a, b, std.testing.allocator)) |result| {
+        if (result) |val| {
+            try std.testing.expectEqual(val.number, 7.5);
+        }
+    } else |_| {}
+    if (Value.sub(a, b, std.testing.allocator)) |result| {
+        if (result) |val| {
+            try std.testing.expectEqual(val.number, 2.5);
+        }
+    } else |_| {}
+    if (Value.mul(a, b, std.testing.allocator)) |result| {
+        if (result) |val| {
+            try std.testing.expectEqual(val.number, 12.5);
+        }
+    } else |_| {}
+    if (Value.div(a, b, std.testing.allocator)) |result| {
+        if (result) |val| {
+            try std.testing.expectEqual(val.number, 2.0);
+        }
+    } else |_| {}
     if (Value.negate(a)) |result| {
         try std.testing.expectEqual(result.number, -5.0);
     }
 
     // Test operations with booleans (should return null)
     const c = Value.boolean(true);
-    try std.testing.expectEqual(Value.add(a, c), null);
-    try std.testing.expectEqual(Value.sub(a, c), null);
-    try std.testing.expectEqual(Value.mul(a, c), null);
-    try std.testing.expectEqual(Value.div(a, c), null);
+    if (Value.add(a, c, std.testing.allocator)) |result| {
+        try std.testing.expectEqual(result, null);
+    } else |_| {}
+    if (Value.sub(a, c, std.testing.allocator)) |result| {
+        try std.testing.expectEqual(result, null);
+    } else |_| {}
+    if (Value.mul(a, c, std.testing.allocator)) |result| {
+        try std.testing.expectEqual(result, null);
+    } else |_| {}
+    if (Value.div(a, c, std.testing.allocator)) |result| {
+        try std.testing.expectEqual(result, null);
+    } else |_| {}
     try std.testing.expectEqual(Value.negate(c), null);
 }
 
@@ -279,28 +335,44 @@ test "Value - boolean operations" {
     const n = Value.number(1.0);
 
     // Test AND
-    if (Value.logicalAnd(t, t)) |result| {
-        try std.testing.expectEqual(result.boolean, true);
-    }
-    if (Value.logicalAnd(t, f)) |result| {
-        try std.testing.expectEqual(result.boolean, false);
-    }
-    if (Value.logicalAnd(f, f)) |result| {
-        try std.testing.expectEqual(result.boolean, false);
-    }
-    try std.testing.expectEqual(Value.logicalAnd(t, n), null);
+    if (Value.logicalAnd(t, t, std.testing.allocator)) |result| {
+        if (result) |val| {
+            try std.testing.expectEqual(val.boolean, true);
+        }
+    } else |_| {}
+    if (Value.logicalAnd(t, f, std.testing.allocator)) |result| {
+        if (result) |val| {
+            try std.testing.expectEqual(val.boolean, false);
+        }
+    } else |_| {}
+    if (Value.logicalAnd(f, f, std.testing.allocator)) |result| {
+        if (result) |val| {
+            try std.testing.expectEqual(val.boolean, false);
+        }
+    } else |_| {}
+    if (Value.logicalAnd(t, n, std.testing.allocator)) |result| {
+        try std.testing.expectEqual(result, null);
+    } else |_| {}
 
     // Test OR
-    if (Value.logicalOr(t, t)) |result| {
-        try std.testing.expectEqual(result.boolean, true);
-    }
-    if (Value.logicalOr(t, f)) |result| {
-        try std.testing.expectEqual(result.boolean, true);
-    }
-    if (Value.logicalOr(f, f)) |result| {
-        try std.testing.expectEqual(result.boolean, false);
-    }
-    try std.testing.expectEqual(Value.logicalOr(t, n), null);
+    if (Value.logicalOr(t, t, std.testing.allocator)) |result| {
+        if (result) |val| {
+            try std.testing.expectEqual(val.boolean, true);
+        }
+    } else |_| {}
+    if (Value.logicalOr(t, f, std.testing.allocator)) |result| {
+        if (result) |val| {
+            try std.testing.expectEqual(val.boolean, true);
+        }
+    } else |_| {}
+    if (Value.logicalOr(f, f, std.testing.allocator)) |result| {
+        if (result) |val| {
+            try std.testing.expectEqual(val.boolean, false);
+        }
+    } else |_| {}
+    if (Value.logicalOr(t, n, std.testing.allocator)) |result| {
+        try std.testing.expectEqual(result, null);
+    } else |_| {}
 
     // Test NOT
     if (Value.not(t)) |result| {
@@ -333,4 +405,42 @@ test "Value - string operations" {
     };
     try std.testing.expectEqual(false, Value.equals(str_val, str_val2));
 
+    // Test string concatenation
+    const str_val3 = try Value.createString(allocator, "world");
+    defer if (str_val3.string) |str_ptr3| {
+        str_ptr3.deinit(allocator);
+    };
+
+    if (try Value.add(str_val, str_val3, allocator)) |result| {
+        defer if (result.string) |str_ptr| {
+            str_ptr.deinit(allocator);
+        };
+        try std.testing.expect(result == .string);
+        if (result.string) |str_ptr| {
+            try std.testing.expectEqualStrings("helloworld", str_ptr.chars);
+        }
+    }
+}
+
+test "ValueArray - contains" {
+    var array = ValueArray.init(std.testing.allocator);
+    defer array.deinit();
+
+    const num = Value.number(1.5);
+    const bool_val = Value.boolean(true);
+    const str = try Value.createString(std.testing.allocator, "test");
+    defer if (str.string) |str_ptr| {
+        str_ptr.deinit(std.testing.allocator);
+    };
+
+    // Discard the indices since we don't need them for this test
+    _ = try array.add(num);
+    _ = try array.add(bool_val);
+    _ = try array.add(str);
+
+    try std.testing.expect(array.contains(num));
+    try std.testing.expect(array.contains(bool_val));
+    try std.testing.expect(array.contains(str));
+    try std.testing.expect(!array.contains(Value.number(2.0)));
+    try std.testing.expect(!array.contains(Value.boolean(false)));
 }

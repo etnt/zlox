@@ -20,7 +20,19 @@ pub fn main() !void {
     // Add number constants to our chunk
     const const1 = try chunk.addConstant(Value.number(2.0));
     const const2 = try chunk.addConstant(Value.number(3.4));
-    const hello = try chunk.addConstant(try Value.createString(allocator, "Hello"));
+
+    // Create and add string constants, cleaning up the originals after adding to chunk
+    const hello_str = try Value.createString(allocator, "Hello");
+    const hello = try chunk.addConstant(hello_str);
+    if (hello_str.string) |str_ptr| {
+        str_ptr.deinit(allocator);
+    }
+
+    const world_str = try Value.createString(allocator, " World!");
+    const world = try chunk.addConstant(world_str);
+    if (world_str.string) |str_ptr| {
+        str_ptr.deinit(allocator);
+    }
 
     // Write a sequence of opcodes with line numbers that demonstrate run-length encoding:
     try chunk.writeOpcode(OpCode.CONSTANT, 1234);
@@ -37,9 +49,12 @@ pub fn main() !void {
     try chunk.writeOpcode(OpCode.FALSE, 4567);
     try chunk.writeOpcode(OpCode.AND, 4567);
 
-    // Push a String on the stack
+    // Concatenate two strings
     try chunk.writeOpcode(OpCode.CONSTANT, 9999);
     try chunk.writeByte(@intCast(hello), 9999);
+    try chunk.writeOpcode(OpCode.CONSTANT, 9999);
+    try chunk.writeByte(@intCast(world), 9999);
+    try chunk.writeOpcode(OpCode.ADD, 9999);
 
     try chunk.writeOpcode(OpCode.RETURN, 1234);
 

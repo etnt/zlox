@@ -30,12 +30,40 @@ pub const VM = struct {
 
     /// Free the VM (does not free the chunk as it's managed elsewhere)
     pub fn deinit(self: *VM) void {
+        // Clean up any temporary strings on the stack
+        for (self.stack.items) |value| {
+            switch (value) {
+                .string => |str| {
+                    if (str) |str_ptr| {
+                        // Only free strings that are not constants
+                        if (!self.chunk.constants.contains(value)) {
+                            str_ptr.deinit(self.allocator);
+                        }
+                    }
+                },
+                else => {},
+            }
+        }
         self.stack.deinit();
         self.* = undefined;
     }
 
     /// Reset the stack
     pub fn resetStack(self: *VM) void {
+        // Clean up any temporary strings before clearing
+        for (self.stack.items) |value| {
+            switch (value) {
+                .string => |str| {
+                    if (str) |str_ptr| {
+                        // Only free strings that are not constants
+                        if (!self.chunk.constants.contains(value)) {
+                            str_ptr.deinit(self.allocator);
+                        }
+                    }
+                },
+                else => {},
+            }
+        }
         self.stack.clearRetainingCapacity();
     }
 
@@ -82,7 +110,7 @@ pub const VM = struct {
         return self.run();
     }
 
-    fn binary_op(self: *VM, comptime op: fn (Value, Value) ?Value) InterpretResult {
+    fn binary_op(self: *VM, comptime op: fn (Value, Value, std.mem.Allocator) anyerror!?Value) InterpretResult {
         const right = self.pop() catch |err| {
             std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
@@ -92,8 +120,19 @@ pub const VM = struct {
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
         };
 
-        if (op(left, right)) |result| {
-            self.push(result) catch |err| {
+        const result = op(left, right, self.allocator) catch |err| {
+            std.debug.print("Error in binary operation: {s}\n", .{@errorName(err)});
+            return InterpretResult.INTERPRET_RUNTIME_ERROR;
+        };
+
+        if (result) |value| {
+            self.push(value) catch |err| {
+                // Clean up the result if it's a string since we failed to push it
+                if (value == .string) {
+                    if (value.string) |str_ptr| {
+                        str_ptr.deinit(self.allocator);
+                    }
+                }
                 std.debug.print("Error pushing result: {s}\n", .{@errorName(err)});
                 return InterpretResult.INTERPRET_RUNTIME_ERROR;
             };
