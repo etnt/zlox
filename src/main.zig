@@ -167,6 +167,7 @@ test "boolean operations" {
     try std.testing.expectEqual(Value.boolean(false), and_result);
 }
 
+// To run only this test: zig test src/main.zig  --test-filter "mixed operations"
 test "mixed operations" {
     var chunk = Chunk.init(std.testing.allocator);
     defer chunk.deinit();
@@ -181,6 +182,8 @@ test "mixed operations" {
     try chunk.writeOpcode(OpCode.ADD, 1);
 
     // Create VM and interpret
+    // NOTE: This may produce some debug output warning about wrong type of operands
+    //       but that is what we want to test here, i.e we expect a runtime error.
     var vm = VM.init(&chunk, false, std.testing.allocator);
     defer vm.deinit();
     try std.testing.expectEqual(InterpretResult.INTERPRET_RUNTIME_ERROR, vm.interpret());

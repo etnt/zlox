@@ -14,11 +14,13 @@ pub const Object = struct {
     /// String object type
     pub const String = struct {
         obj: Object,
+        length: usize,
         chars: []u8,
 
         pub fn init(allocator: std.mem.Allocator, chars: []const u8) !*String {
             const string = try allocator.create(String);
             string.obj = .{ .type = .string };
+            string.length = chars.len;
             string.chars = try allocator.dupe(u8, chars);
             return string;
         }

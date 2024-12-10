@@ -301,6 +301,7 @@ test "Value - string operations" {
 
     try std.testing.expect(str_val == .string);
     if (str_val.string) |str_ptr| {
+        try std.testing.expectEqual(5, str_ptr.length);
         try std.testing.expectEqualStrings("hello", str_ptr.chars);
     }
 }
