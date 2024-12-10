@@ -2,6 +2,9 @@ const std = @import("std");
 const Chunk = @import("chunk.zig").Chunk;
 const OpCode = @import("opcodes.zig").OpCode;
 const Value = @import("value.zig").Value;
+const obj = @import("object.zig");
+
+pub const String = obj.Object.String;
 
 pub const InterpretResult = enum(u8) {
     INTERPRET_OK,
@@ -45,6 +48,7 @@ pub const VM = struct {
             }
         }
         self.stack.deinit();
+        obj.deinitInternPool();
         self.* = undefined;
     }
 

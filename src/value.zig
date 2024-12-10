@@ -165,9 +165,8 @@ pub const Value = union(ValueType) {
                 // Handle null cases
                 if (str_a == null and str_b == null) return true;
                 if (str_a == null or str_b == null) return false;
-                // Both strings are non-null, safe to access fields
-                return str_a.?.length == str_b.?.length and 
-                       std.mem.eql(u8, str_a.?.chars, str_b.?.chars);
+                // Since strings are interned, we can just compare pointers
+                return str_a == str_b;
             },
             .object => |obj_a| b.object == obj_a,
         };
@@ -387,31 +386,33 @@ test "Value - boolean operations" {
 test "Value - string operations" {
     const allocator = std.testing.allocator;
 
-    // Test the new string convenience function
-    const str_val = try Value.createString(allocator, "hello");
-    defer if (str_val.string) |str_ptr| {
+    // Test string creation and equality with interning
+    const str_val1 = try Value.createString(allocator, "hello");
+    defer if (str_val1.string) |str_ptr| {
         str_ptr.deinit(allocator);
     };
 
-    try std.testing.expect(str_val == .string);
-    if (str_val.string) |str_ptr| {
-        try std.testing.expectEqual(5, str_ptr.length);
-        try std.testing.expectEqualStrings("hello", str_ptr.chars);
+    const str_val2 = try Value.createString(allocator, "hello");
+    // Don't need to defer deinit for str_val2 since it's the same string as str_val1
+
+    // Test that we got the same string back (pointer equality)
+    try std.testing.expect(Value.equals(str_val1, str_val2));
+    if (str_val1.string) |str1| {
+        if (str_val2.string) |str2| {
+            try std.testing.expectEqual(str1, str2);
+        }
     }
 
-    const str_val2 = try Value.createString(allocator, "Hello");
-    defer if (str_val2.string) |str_ptr2| {
-        str_ptr2.deinit(allocator);
-    };
-    try std.testing.expectEqual(false, Value.equals(str_val, str_val2));
-
-    // Test string concatenation
+    // Test different strings
     const str_val3 = try Value.createString(allocator, "world");
     defer if (str_val3.string) |str_ptr3| {
         str_ptr3.deinit(allocator);
     };
 
-    if (try Value.add(str_val, str_val3, allocator)) |result| {
+    try std.testing.expect(!Value.equals(str_val1, str_val3));
+
+    // Test string concatenation
+    if (try Value.add(str_val1, str_val3, allocator)) |result| {
         defer if (result.string) |str_ptr| {
             str_ptr.deinit(allocator);
         };
@@ -420,24 +421,32 @@ test "Value - string operations" {
             try std.testing.expectEqualStrings("helloworld", str_ptr.chars);
         }
     }
+
+    // Clean up the intern pool after all strings are freed
+    defer obj.deinitInternPool();
 }
 
 test "ValueArray - contains" {
-    var array = ValueArray.init(std.testing.allocator);
-    defer array.deinit();
+    const allocator = std.testing.allocator;
 
     const num = Value.number(1.5);
     const bool_val = Value.boolean(true);
-    const str = try Value.createString(std.testing.allocator, "test");
-    defer if (str.string) |str_ptr| {
-        str_ptr.deinit(std.testing.allocator);
-    };
+    const str = try Value.createString(allocator, "test");
 
-    // Discard the indices since we don't need them for this test
+    var array = ValueArray.init(allocator);
+    defer {
+        // First deinit the array which will free the strings
+        array.deinit();
+        // Then clean up the intern pool
+        obj.deinitInternPool();
+    }
+
+    // Add values to array
     _ = try array.add(num);
     _ = try array.add(bool_val);
     _ = try array.add(str);
 
+    // Test contains
     try std.testing.expect(array.contains(num));
     try std.testing.expect(array.contains(bool_val));
     try std.testing.expect(array.contains(str));

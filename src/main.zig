@@ -21,18 +21,10 @@ pub fn main() !void {
     const const1 = try chunk.addConstant(Value.number(2.0));
     const const2 = try chunk.addConstant(Value.number(3.4));
 
-    // Create and add string constants, cleaning up the originals after adding to chunk
-    const hello_str = try Value.createString(allocator, "Hello");
-    const hello = try chunk.addConstant(hello_str);
-    if (hello_str.string) |str_ptr| {
-        str_ptr.deinit(allocator);
-    }
-
-    const world_str = try Value.createString(allocator, " World!");
-    const world = try chunk.addConstant(world_str);
-    if (world_str.string) |str_ptr| {
-        str_ptr.deinit(allocator);
-    }
+    // Create and add string constants
+    // Note: Don't deinit strings after adding to chunk - the chunk owns them now
+    const hello = try chunk.addConstant(try Value.createString(allocator, "Hello"));
+    const world = try chunk.addConstant(try Value.createString(allocator, " World!"));
 
     // Write a sequence of opcodes with line numbers that demonstrate run-length encoding:
     try chunk.writeOpcode(OpCode.CONSTANT, 1234);
