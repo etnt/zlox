@@ -341,6 +341,28 @@ pub const VM = struct {
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     }
                 },
+                OpCode.GET_GLOBAL => {
+                    const name = self.pop() catch |err| {
+                        std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
+                    if (name == .string) {
+                        if (name.string) |str_ptr| {
+                            if (self.globals.get(str_ptr.chars)) |value| {
+                                self.push(value) catch |err| {
+                                    std.debug.print("Error pushing value: {s}\n", .{@errorName(err)});
+                                    return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                                };
+                            } else {
+                                std.debug.print("Undefined global variable: {s}\n", .{str_ptr.chars});
+                                return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                            }
+                        }
+                    } else {
+                        std.debug.print("Invalid operand type for GET_GLOBAL\n", .{});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    }
+                },
                 else => {
                     std.debug.print("Unknown opcode {d}\n", .{opcode});
                     return InterpretResult.INTERPRET_RUNTIME_ERROR;

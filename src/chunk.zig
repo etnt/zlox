@@ -146,6 +146,10 @@ pub const Chunk = struct {
                     std.debug.print("SET_GLOBAL\n", .{});
                     return offset + 1;
                 },
+                OpCode.GET_GLOBAL => {
+                    std.debug.print("GET_GLOBAL\n", .{});
+                    return offset + 1;
+                },
                 else => {
                     std.debug.print("Unknown opcode {d}\n", .{instruction});
                     return offset + 1;

@@ -11,22 +11,29 @@ pub fn assignment(allocator: std.mem.Allocator) !Chunk {
     // Global variable: myvar = 2.71828
     const myvar = try chunk.addConstant(try Value.createString(allocator, "myvar"));
     const e = try chunk.addConstant(Value.number(2.71828));
-    try chunk.writeOpcode(OpCode.NIL, 10);             // the value is null
-    try chunk.writeOpcode(OpCode.CONSTANT, 10);        // the name is a constant
-    try chunk.writeByte(@intCast(myvar), 10);        // the name of the variable
-    try chunk.writeOpcode(OpCode.DEFINE_GLOBAL, 10);   // define the global variable
+    try chunk.writeOpcode(OpCode.NIL, 100);             // the value is null
+    try chunk.writeOpcode(OpCode.CONSTANT, 100);        // the name is a constant
+    try chunk.writeByte(@intCast(myvar), 100);        // the name of the variable
+    try chunk.writeOpcode(OpCode.DEFINE_GLOBAL, 100);   // define the global variable
 
     // Assign value to the global variable: myvar = 2.71828
-    try chunk.writeOpcode(OpCode.CONSTANT, 11);
-    try chunk.writeByte(@intCast(e), 11);
-    try chunk.writeOpcode(OpCode.CONSTANT, 11);
-    try chunk.writeByte(@intCast(myvar), 11);
-    try chunk.writeOpcode(OpCode.SET_GLOBAL, 11);
+    try chunk.writeOpcode(OpCode.CONSTANT, 114);
+    try chunk.writeByte(@intCast(e), 114);
+    try chunk.writeOpcode(OpCode.CONSTANT, 114);
+    try chunk.writeByte(@intCast(myvar), 114);
+    try chunk.writeOpcode(OpCode.SET_GLOBAL, 114);
 
-    try chunk.writeOpcode(OpCode.RETURN, 12);
+    // Print the value of the global variable: print(myvar)
+    try chunk.writeOpcode(OpCode.CONSTANT, 115);
+    try chunk.writeByte(@intCast(myvar), 115);
+    try chunk.writeOpcode(OpCode.GET_GLOBAL, 115);
+    try chunk.writeOpcode(OpCode.PRINT, 116);
+
+    try chunk.writeOpcode(OpCode.RETURN, 117);
 
     return chunk;
 }
+
 
 pub fn concatenate(allocator: std.mem.Allocator) !Chunk {
     // Create a new chunk

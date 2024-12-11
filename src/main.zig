@@ -18,9 +18,9 @@ pub fn main() !void {
 
     // EXAMPLE: arithmetics
     // ----------------------------
-    const ex_name = "arithmetics";
-    var example = try ex.arithmetics(allocator);
-    defer example.deinit();
+    //const ex_name = "arithmetics";
+    //var example = try ex.arithmetics(allocator);
+    //defer example.deinit();
 
     // EXAMPLE: concatenate strings
     // ----------------------------
@@ -30,9 +30,9 @@ pub fn main() !void {
 
     // EXAMPLE: variable assignment
     // ----------------------------
-    //const ex_name = "variable assignment";
-    //var example = try ex.assignment(allocator);
-    //defer example.deinit();
+    const ex_name = "variable assignment";
+    var example = try ex.assignment(allocator);
+    defer example.deinit();
 
     // Disassemble the chunk to see its contents
     const ex_header = try std.fmt.allocPrint(allocator, "{s}{s}", .{ ex_hdr, ex_name });
