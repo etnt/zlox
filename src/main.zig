@@ -7,79 +7,41 @@ const Value = @import("value.zig").Value;
 const vm_mod = @import("vm.zig");
 const InterpretResult = vm_mod.InterpretResult;
 const obj = @import("object.zig");
+const ex: type = @import("examples.zig");
 
 pub fn main() !void {
     // Get a general purpose allocator
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
+    const ex_hdr = "Example: ";
 
-    // Create a new chunk that can store both opcodes and constants
-    var chunk = Chunk.init(allocator);
-    defer chunk.deinit();
+    // EXAMPLE: arithmetics
+    // ----------------------------
+    const ex_name = "arithmetics";
+    var example = try ex.arithmetics(allocator);
+    defer example.deinit();
 
-    // Add number constants to our chunk
-    const const1 = try chunk.addConstant(Value.number(2.0));
-    const const2 = try chunk.addConstant(Value.number(3.4));
+    // EXAMPLE: concatenate strings
+    // ----------------------------
+    //const ex_name = "concatenate strings";
+    //var example = try ex.concatenate(allocator);
+    //defer example.deinit();
 
-    // Create and add string constants
-    // Note: Don't deinit strings after adding to chunk - the chunk owns them now
-    const hello = try chunk.addConstant(try Value.createString(allocator, "Hello"));
-    const world = try chunk.addConstant(try Value.createString(allocator, " World!"));
-
-    // Write a sequence of opcodes with line numbers that demonstrate run-length encoding:
-    try chunk.writeOpcode(OpCode.CONSTANT, 1234);
-    try chunk.writeByte(@intCast(const1), 1234);
-
-    try chunk.writeOpcode(OpCode.CONSTANT, 4567);
-    try chunk.writeByte(@intCast(const2), 4567);
-
-    try chunk.writeOpcode(OpCode.NEGATE, 4567);
-    try chunk.writeOpcode(OpCode.ADD, 4567);
-
-    // Use TRUE and FALSE opcodes directly
-    try chunk.writeOpcode(OpCode.TRUE, 4567);
-    try chunk.writeOpcode(OpCode.FALSE, 4567);
-    try chunk.writeOpcode(OpCode.AND, 4567);
-
-    // Concatenate two strings
-    try chunk.writeOpcode(OpCode.CONSTANT, 5998);
-    try chunk.writeByte(@intCast(hello), 5998);
-    try chunk.writeOpcode(OpCode.CONSTANT, 5998);
-    try chunk.writeByte(@intCast(world), 5998);
-    try chunk.writeOpcode(OpCode.ADD, 5998);
-    try chunk.writeOpcode(OpCode.PRINT, 5999);
-
-    // Global variable: myvar = null
-    const myvar = try chunk.addConstant(try Value.createString(allocator, "myvar"));
-    const e = try chunk.addConstant(Value.number(2.71828));
-    try chunk.writeOpcode(OpCode.NIL, 6060);           // the value is null
-    try chunk.writeOpcode(OpCode.CONSTANT, 6060);      // the name is a constant
-    try chunk.writeByte(@intCast(myvar), 6060);      // the name of the variable
-    try chunk.writeOpcode(OpCode.DEFINE_GLOBAL, 6060); // define the global variable
-    // Assign value to the global variable: myvar = 2.71828
-    try chunk.writeOpcode(OpCode.CONSTANT, 6061);
-    try chunk.writeByte(@intCast(e), 6061);
-    try chunk.writeOpcode(OpCode.CONSTANT, 6061);
-    try chunk.writeByte(@intCast(myvar), 6061);
-    try chunk.writeOpcode(OpCode.SET_GLOBAL, 6061);
-
-    try chunk.writeOpcode(OpCode.RETURN, 1234);
+    // EXAMPLE: variable assignment
+    // ----------------------------
+    //const ex_name = "variable assignment";
+    //var example = try ex.assignment(allocator);
+    //defer example.deinit();
 
     // Disassemble the chunk to see its contents
+    const ex_header = try std.fmt.allocPrint(allocator, "{s}{s}", .{ ex_hdr, ex_name });
+    defer allocator.free(ex_header);
     std.debug.print("\nChunk Disassembly:\n", .{});
-    chunk.disassemble("main");
-
-    // Print information about the run-length encoding
-    std.debug.print("\nRun-Length Encoding Info:\n", .{});
-    std.debug.print("Total instructions: {d}\n", .{chunk.lines.count()});
-    std.debug.print("Number of runs: {d}\n", .{chunk.lines.runs.items.len});
-    for (chunk.lines.runs.items, 0..) |run, i| {
-        std.debug.print("Run {d}: {d} instructions from line {d}\n", .{ i + 1, run.count, run.line });
-    }
+    example.disassemble(ex_header);
 
     // Create and initialize a VM with tracing enabled
-    var vm = VM.init(&chunk, true, allocator);
+    var vm = VM.init(&example, true, allocator);
     defer vm.deinit();
 
     // Interpret the code
