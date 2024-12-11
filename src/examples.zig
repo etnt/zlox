@@ -4,6 +4,36 @@ const Chunk = root.Chunk;
 const OpCode = root.OpCode;
 const Value = root.Value;
 
+pub fn local_variables(allocator: std.mem.Allocator) !Chunk {
+    // Create a new chunk
+    var chunk = Chunk.init(allocator);
+
+    const pi = try chunk.addConstant(Value.number(3.14159));
+
+    // Define a local variable: let a = π * π
+    try chunk.writeOpcode(OpCode.NIL, 100);            // in slot 0, the value is initially null
+
+    try chunk.writeOpcode(OpCode.CONSTANT, 100);       // push the value (π) on the stack
+    try chunk.writeByte(@intCast(pi), 100);          // here comes a value (π)
+
+    try chunk.writeOpcode(OpCode.CONSTANT, 100);       // push the value (π) on the stack
+    try chunk.writeByte(@intCast(pi), 100);          // here comes a value (π)
+
+    try chunk.writeOpcode(OpCode.MUL, 100);            // multiply the two values
+
+    try chunk.writeOpcode(OpCode.SET_LOCAL, 100);      // the local variable at slot 0 to the result
+    try chunk.writeByte(@intCast(0), 100);           // here comes the slot value 0
+
+    // NOTE: SET_LOCAL does not pop the value from the stack
+    //       so we need to do that manually here.
+    try chunk.writeOpcode(OpCode.POP, 100);
+
+    try chunk.writeOpcode(OpCode.RETURN, 101);
+
+    return chunk;
+}
+
+
 pub fn assignment(allocator: std.mem.Allocator) !Chunk {
     // Create a new chunk
     var chunk = Chunk.init(allocator);

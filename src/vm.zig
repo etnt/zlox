@@ -18,6 +18,7 @@ pub const VM = struct {
     trace: bool = false,                // Enable tracing
     allocator: std.mem.Allocator,       // Allocator for dynamic memory
     stack: std.ArrayList(Value),        // Dynamic stack
+    sp: usize = 0,                      // Stack pointer
     globals: std.StringHashMap(Value),  // Global variables
 
     /// Initialize a new VM with a pre-existing chunk
@@ -93,6 +94,7 @@ pub const VM = struct {
     /// Push a value onto the stack
     pub fn push(self: *VM, value: Value) !void {
         try self.stack.append(value);
+        self.sp += 1;
     }
 
     /// Pop a value from the stack
@@ -100,7 +102,12 @@ pub const VM = struct {
         if (self.stack.items.len == 0) {
             return error.StackUnderflow;
         }
+        self.sp -= 1;
         return self.stack.pop();
+    }
+
+    pub fn getSP(self: *VM) usize {
+        return self.sp;
     }
 
     /// Peek at the top value without removing it
@@ -362,6 +369,26 @@ pub const VM = struct {
                         std.debug.print("Invalid operand type for GET_GLOBAL\n", .{});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     }
+                },
+                OpCode.SET_LOCAL => {
+                    // Get the slot number from the instruction stream
+                    const slot = self.ip[0];
+                    self.ip += 1;
+
+                    // Pop the value to store
+                    const value = self.peek(0) catch |err| {
+                        std.debug.print("Error popping local value: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
+
+                    // Validate slot is within bounds
+                    if (slot >= self.stack.items.len) {
+                        std.debug.print("Invalid slot index for SET_LOCAL\n", .{});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    }
+
+                    // Set the value at the slot
+                    self.stack.items[slot] = value;
                 },
                 else => {
                     std.debug.print("Unknown opcode {d}\n", .{opcode});

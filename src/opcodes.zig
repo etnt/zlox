@@ -18,6 +18,8 @@ pub const OpCode = struct {
     pub const DEFINE_GLOBAL: u8 = 0x0F;    // Define a global variable
     pub const SET_GLOBAL: u8 = 0x10;       // Set a global variable
     pub const GET_GLOBAL: u8 = 0x11;       // Get a global variable
+    pub const SET_LOCAL: u8 = 0x12;        // Set a local variable
+    pub const GET_LOCAL: u8 = 0x13;        // Get a local variable
 
     // Convert opcode value to name
     pub fn getName(code: u8) []const u8 {
@@ -40,6 +42,8 @@ pub const OpCode = struct {
             DEFINE_GLOBAL => "DEFINE_GLOBAL",
             SET_GLOBAL => "SET_GLOBAL",
             GET_GLOBAL => "GET_GLOBAL",
+            SET_LOCAL => "SET_LOCAL",
+            GET_LOCAL => "GET_LOCAL",
             else => "UNKNOWN",
         };
     }
@@ -65,5 +69,7 @@ test "opcode names" {
     try std.testing.expectEqualStrings("DEFINE_GLOBAL", OpCode.getName(OpCode.DEFINE_GLOBAL));
     try std.testing.expectEqualStrings("SET_GLOBAL", OpCode.getName(OpCode.SET_GLOBAL));
     try std.testing.expectEqualStrings("GET_GLOBAL", OpCode.getName(OpCode.GET_GLOBAL));
+    try std.testing.expectEqualStrings("SET_LOCAL", OpCode.getName(OpCode.SET_LOCAL));
+    try std.testing.expectEqualStrings("GET_LOCAL", OpCode.getName(OpCode.GET_LOCAL));
     try std.testing.expectEqualStrings("UNKNOWN", OpCode.getName(0xFF));
 }

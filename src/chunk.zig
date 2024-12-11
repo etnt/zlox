@@ -7,9 +7,16 @@ const OpCode = @import("opcodes.zig").OpCode;
 
 /// Chunk represents a sequence of bytecode instructions and their associated constant values
 pub const Chunk = struct {
+    // The actual bytecode
     code: ByteArray,
+
+    // Each chunk will carry with it a list of the values that appear as
+    // literals in the program. To keep things simpler, we’ll put all
+    // constants in here, even simple integers.
     constants: ValueArray,
-    lines: LineArray, // Store line numbers using run-length encoding
+
+    // Store line numbers using run-length encoding
+    lines: LineArray,
 
     /// Initialize a new Chunk with the given allocator
     pub fn init(allocator: std.mem.Allocator) Chunk {
@@ -148,6 +155,15 @@ pub const Chunk = struct {
                 },
                 OpCode.GET_GLOBAL => {
                     std.debug.print("GET_GLOBAL\n", .{});
+                    return offset + 1;
+                },
+                OpCode.SET_LOCAL => {
+                    const slot = self.code.at(offset + 1).?;
+                    std.debug.print("SET_LOCAL         {d} \n", .{slot});
+                    return offset + 2;
+                },
+                OpCode.GET_LOCAL => {
+                    std.debug.print("GET_LOCAL\n", .{});
                     return offset + 1;
                 },
                 else => {

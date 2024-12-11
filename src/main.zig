@@ -30,8 +30,14 @@ pub fn main() !void {
 
     // EXAMPLE: variable assignment
     // ----------------------------
-    const ex_name = "variable assignment";
-    var example = try ex.assignment(allocator);
+    //const ex_name = "variable assignment";
+    //var example = try ex.assignment(allocator);
+    //defer example.deinit();
+
+    // EXAMPLE: local variable assignment
+    // ----------------------------
+    const ex_name = "local variable assignment";
+    var example = try ex.local_variables(allocator);
     defer example.deinit();
 
     // Disassemble the chunk to see its contents
