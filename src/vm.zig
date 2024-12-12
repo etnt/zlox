@@ -16,6 +16,7 @@ pub const VM = struct {
     chunk: *Chunk,                      // Chunk to interpret
     ip: [*]u8,                          // Instruction pointer
     trace: bool = false,                // Enable tracing
+    slow: bool = false,                 // Run slow for "animated" effect
     allocator: std.mem.Allocator,       // Allocator for dynamic memory
     stack: std.ArrayList(Value),        // Dynamic stack
     sp: usize = 0,                      // Stack pointer
@@ -70,6 +71,12 @@ pub const VM = struct {
 
         obj.deinitInternPool();
         self.* = undefined;
+    }
+
+    pub fn set_slow(self: *VM, slow: bool) bool {
+        const old_slow = self.slow;
+        self.slow = slow;
+        return old_slow;
     }
 
     /// Reset the stack
@@ -216,7 +223,14 @@ pub const VM = struct {
     }
 
     fn run(self: *VM) InterpretResult {
+        const one_second = 1 * std.time.ns_per_s;
+
         while (true) {
+            // Just for a "cool" effect when running the examples
+            if (self.slow) {
+                std.time.sleep(one_second);
+            }
+
             if (self.trace) {
                 // Print the stack before each instruction
                 self.printStack();

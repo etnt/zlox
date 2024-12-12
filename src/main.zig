@@ -1,5 +1,6 @@
 const std = @import("std");
 const root = @import("root.zig");
+const clap: type = @import("clap");
 const OpCode = root.OpCode;
 const Chunk = root.Chunk;
 const VM = root.VM;
@@ -15,29 +16,68 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
     const ex_hdr = "Example: ";
+    var run_slow = false;
+    var ex_name: []const u8 = undefined;
 
-    // EXAMPLE: arithmetics
-    // ----------------------------
-    //const ex_name = "arithmetics";
-    //var example = try ex.arithmetics(allocator);
-    //defer example.deinit();
+    const params = comptime clap.parseParamsComptime(
+        \\-h, --help             Display this help and exit.
+        \\-x, --example <usize>  Choose example to run
+        \\-s, --slow             Run slow (for animated effect)
+        \\
+    );
 
-    // EXAMPLE: concatenate strings
-    // ----------------------------
-    //const ex_name = "concatenate strings";
-    //var example = try ex.concatenate(allocator);
-    //defer example.deinit();
+    var diag = clap.Diagnostic{};
+    var res = clap.parse(clap.Help, &params, clap.parsers.default, .{
+        .diagnostic = &diag,
+        .allocator = gpa.allocator(),
+    }) catch |err| {
+        // Report useful error and exit.
+        diag.report(std.io.getStdErr().writer(), err) catch {};
+        return err;
+    };
+    defer res.deinit();
 
-    // EXAMPLE: variable assignment
-    // ----------------------------
-    //const ex_name = "variable assignment";
-    //var example = try ex.assignment(allocator);
-    //defer example.deinit();
+    if (res.args.help != 0) {
+        std.debug.print("Usage: zig build run -- [options]\n", .{});
+        std.debug.print("Options:\n", .{});
+        std.debug.print("  -h, --help             Display this help and exit\n", .{});
+        std.debug.print("  -x, --example <usize>  Choose example to run (1-4)\n", .{});
+        std.debug.print("  -s, --slow             Run slow (for animated effect)\n", .{});
+        std.debug.print("\nExamples:\n", .{});
+        std.debug.print("  1: Local variable assignment\n", .{});
+        std.debug.print("  2: Global variable assignment\n", .{});
+        std.debug.print("  3: String concatenation\n", .{});
+        std.debug.print("  4: Arithmetic operations\n", .{});
+        return;
+    }
 
-    // EXAMPLE: local variable assignment
-    // ----------------------------
-    const ex_name = "local variable assignment";
-    var example = try ex.local_variables(allocator);
+    if (res.args.slow != 0)
+        run_slow = true;
+
+    // Choose which example to run based on command line argument
+    const run_example = res.args.example orelse 1;
+    var example = switch (run_example) {
+        1 => blk: {
+            ex_name = "local variable assignment";
+            break :blk try ex.local_variables(allocator);
+        },
+        2 => blk: {
+            ex_name = "variable assignment";
+            break :blk try ex.assignment(allocator);
+        },
+        3 => blk: {
+            ex_name = "concatenate strings";
+            break :blk try ex.concatenate(allocator);
+        },
+        4 => blk: {
+            ex_name = "arithmetics";
+            break :blk try ex.arithmetics(allocator);
+        },
+        else => {
+            std.debug.print("Invalid example number. Use --help to see available examples.\n", .{});
+            return;
+        },
+    };
     defer example.deinit();
 
     // Disassemble the chunk to see its contents
@@ -50,6 +90,9 @@ pub fn main() !void {
     var vm = VM.init(&example, true, allocator);
     defer vm.deinit();
 
+    // Make it go sloow...
+    _ = vm.set_slow(run_slow);
+
     // Interpret the code
     std.debug.print("\nInterpreting Code:\n", .{});
     const result = vm.interpret();
@@ -58,6 +101,7 @@ pub fn main() !void {
     // Print the global variables
     std.debug.print("\nGlobal Variables:\n", .{});
     vm.printGlobals();
+    std.debug.print("\n", .{});
 }
 
 test "global variables" {
