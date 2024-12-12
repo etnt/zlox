@@ -1,93 +1,110 @@
-# Zig experiments
-> A collection of Zig experiments based on [Crafting Interpreters](http://www.craftinginterpreters.com/chunks-of-bytecode.html)
+# ZLox - A Bytecode Virtual Machine in Zig
 
-A simple dynamic array implementation for bytes in Zig, demonstrating basic data structure concepts and memory management. Includes support for operation codes (opcodes) with symbolic names.
+A bytecode virtual machine implementation in Zig, based on [Crafting Interpreters](http://www.craftinginterpreters.com/chunks-of-bytecode.html). This project implements a stack-based VM with support for various data types, operations, and variable management.
+
+## Demo
+
+<img src="demo/globalvars.gif" width="600">
 
 ## Features
 
-- Dynamic array of bytes with automatic memory management
-- Push and pop operations
-- Array length tracking
-- Index-based access
-- Pretty printing functionality with opcode symbolic names
-- Predefined operation codes for basic stack operations
+### Data Types and Operations
+- Numbers: Full arithmetic operations (add, subtract, multiply, divide)
+- Booleans: Logical operations (AND, OR, NOT)
+- Strings: Dynamic allocation with string interning for efficiency
+- Variables: Both global and local variable support
 
-## Prerequisites
+### Virtual Machine
+- Dynamic stack implementation using ArrayList
+- Efficient memory management with proper allocation/deallocation
+- Run-length encoding for line number tracking
+- Comprehensive error handling and type checking
 
+### String Optimization
+- String interning for efficient memory usage
+- O(1) string equality comparison
+- Optimized string concatenation
+
+### Variable Management
+- Global variables using StringHashMap
+- Local variable support with stack-based allocation
+- Proper scoping and memory cleanup
+
+## Usage
+
+### Prerequisites
 - [Zig](https://ziglang.org/) compiler (tested with version 0.13.0)
 
-## Building and Running
-
-To build and run the example program:
+### Building and Running
 
 ```bash
 zig build run
 ```
 
-This will demonstrate the ByteArray functionality with example opcode operations.
-
-## Running Tests
-
-To run all tests:
+### Command-line Options
 
 ```bash
-zig build test
-```
+zig build run -- [options]
 
-This will run tests for:
-- Basic push/pop operations
-- Empty array handling
-- Multiple operations sequence
-- Memory management
-- Opcode name resolution
+Options:
+  --example, -x <num>   Select example to run (1-4)
+  --slow, -s            Enable animated execution
+  --help, -h           Display this help message
+
+Examples:
+  1: Local variable assignment
+  2: Global variable assignment
+  3: String concatenation
+  4: Arithmetic operations
+```
 
 ## Project Structure
 
 ```
 src/
-├── main.zig          # Example usage
-├── root.zig         # Library entry point
-├── byte_array.zig   # ByteArray implementation
-└── opcodes.zig      # Operation codes definitions
+├── main.zig          # Entry point and CLI handling
+├── vm.zig           # Virtual Machine implementation
+├── chunk.zig        # Bytecode chunk management
+├── value.zig        # Value type system
+├── object.zig       # Object system (strings, etc.)
+├── opcodes.zig      # Operation codes definitions
+├── examples.zig     # Example programs
+└── root.zig         # Library entry point
 ```
 
-## Usage Example
+## Implementation Details
 
-```zig
-const std = @import("std");
-const ByteArray = @import("byte_array.zig").ByteArray;
-const OpCode = @import("opcodes.zig").OpCode;
+### Value System
+- Tagged union type supporting numbers, booleans, and strings
+- Type-safe operations with runtime checking
+- Efficient memory management for complex types
 
-// Initialize
-var array = ByteArray.init(allocator);
-defer array.deinit();
+### Instruction Set
+- Arithmetic: ADD, SUBTRACT, MULTIPLY, DIVIDE, NEGATE
+- Logic: AND, OR, NOT
+- Variables: DEFINE_GLOBAL, SET_GLOBAL, GET_GLOBAL, SET_LOCAL
+- Stack: PUSH, POP, RETURN
+- Constants: CONSTANT, TRUE, FALSE, NIL
 
-// Push operation codes
-try array.push(OpCode.PUSH);  // 0x01
-try array.push(OpCode.ADD);   // 0x03
+### Memory Management
+- Proper cleanup chains for all allocated resources
+- String interning pool for efficient string handling
+- Stack-based memory management for local variables
 
-// Print with symbolic names
-array.printOpcodes(OpCode.getName);
-// Output:
-// [
-//   0x01 (PUSH)
-//   0x03 (ADD)
-// ]
+## Running Tests
 
-// Pop values
-if (array.pop()) |opcode| {
-    std.debug.print("Popped: {s}\n", .{OpCode.getName(opcode)});
-}
+```bash
+zig build test
 ```
 
-## Available OpCodes
+Tests cover:
+- VM operations and error handling
+- Value type system and operations
+- Memory management and cleanup
+- String interning and concatenation
+- Variable scoping and access
+- Stack operations and bounds checking
 
-The following operation codes are predefined in `opcodes.zig`:
+## License
 
-- `RETURN (0x00)`: Return from function
-- `PUSH (0x01)`: Push value onto stack
-- `POP (0x02)`: Pop value from stack
-- `ADD (0x03)`: Add two values
-- `SUB (0x04)`: Subtract two values
-
-Each opcode can be printed with its symbolic name using the `printOpcodes` function and the `OpCode.getName` helper.
+See [LICENSE](LICENSE) file for details.
