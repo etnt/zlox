@@ -163,7 +163,8 @@ pub const Chunk = struct {
                     return offset + 2;
                 },
                 OpCode.GET_LOCAL => {
-                    std.debug.print("GET_LOCAL\n", .{});
+                    const slot = self.code.at(offset + 1).?;
+                    std.debug.print("GET_LOCAL         {d} \n", .{slot});
                     return offset + 1;
                 },
                 else => {

@@ -404,6 +404,23 @@ pub const VM = struct {
                     // Set the value at the slot
                     self.stack.items[slot] = value;
                 },
+                OpCode.GET_LOCAL => {
+                    // Get the slot number from the instruction stream
+                    const slot = self.ip[0];
+                    self.ip += 1;
+
+                    // Validate slot is within bounds
+                    if (slot >= self.stack.items.len) {
+                        std.debug.print("Invalid slot index for GET_LOCAL\n", .{});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    }
+
+                    // Push the value at the slot onto the stack
+                    self.push(self.stack.items[slot]) catch |err| {
+                        std.debug.print("Error pushing local value: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
+                },
                 else => {
                     std.debug.print("Unknown opcode {d}\n", .{opcode});
                     return InterpretResult.INTERPRET_RUNTIME_ERROR;
