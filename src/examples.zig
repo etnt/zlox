@@ -176,10 +176,99 @@ pub fn if_then_else(allocator: std.mem.Allocator) !Chunk {
     // We should land here; print the result!
     try chunk.writeOpcode(OpCode.PRINT, 1);
 
-
-   
-
     try chunk.writeOpcode(OpCode.RETURN, 2);
+
+    return chunk;
+}
+
+pub fn if_gt(allocator: std.mem.Allocator) !Chunk {
+    var chunk = Chunk.init(allocator);
+
+    // Add constants
+    const c1 = try chunk.addConstant(Value.number(3.0));
+    const c2 = try chunk.addConstant(Value.number(7.0));
+
+    const yes = try chunk.addConstant(try Value.createString(allocator, "Yes"));
+    const no = try chunk.addConstant(try Value.createString(allocator, "No"));
+
+
+    // Setup instructions for: if (3.0 > 7.0) then print("yes") else print("no")
+    try chunk.writeOpcode(OpCode.CONSTANT, 10);
+    try chunk.writeByte(@intCast(c1), 10);
+
+    try chunk.writeOpcode(OpCode.CONSTANT, 10);
+    try chunk.writeByte(@intCast(c2), 10);
+
+    try chunk.writeOpcode(OpCode.GREATER, 10);
+
+    // If False, jump 7 bytes: (POP + CONSTANT + byte + PRINT +JUMP + 2 bytes)
+    try chunk.writeOpcode(OpCode.JUMP_IF_FALSE, 10);
+    try chunk.writeByte(0, 1);            // MSB of jump offset
+    try chunk.writeByte(7, 1);            // LSB of jump offset
+
+    // Load the string "yes", print it, jump to the end of the if expression
+    // Jump 4 bytes: (POP + CONSTANT + byte + PRINT)
+    try chunk.writeOpcode(OpCode.POP, 10);
+    try chunk.writeOpcode(OpCode.CONSTANT, 11);
+    try chunk.writeByte(@intCast(yes), 11);
+    try chunk.writeOpcode(OpCode.PRINT, 11);
+    try chunk.writeOpcode(OpCode.JUMP, 11);
+    try chunk.writeByte(0, 1);            // MSB of jump offset
+    try chunk.writeByte(4, 1);            // LSB of jump offset
+
+    // Load the string "no" onto the stack
+    try chunk.writeOpcode(OpCode.POP, 10);
+    try chunk.writeOpcode(OpCode.CONSTANT, 12);
+    try chunk.writeByte(@intCast(no), 12);
+    try chunk.writeOpcode(OpCode.PRINT, 12);
+
+    try chunk.writeOpcode(OpCode.RETURN, 12);
+
+    return chunk;
+}
+
+pub fn if_lt(allocator: std.mem.Allocator) !Chunk {
+    var chunk = Chunk.init(allocator);
+
+    // Add constants
+    const c1 = try chunk.addConstant(Value.number(3.0));
+    const c2 = try chunk.addConstant(Value.number(7.0));
+
+    const yes = try chunk.addConstant(try Value.createString(allocator, "Yes"));
+    const no = try chunk.addConstant(try Value.createString(allocator, "No"));
+
+
+    // Setup instructions for: if (3.0 > 7.0) then print("yes") else print("no")
+    try chunk.writeOpcode(OpCode.CONSTANT, 10);
+    try chunk.writeByte(@intCast(c1), 10);
+
+    try chunk.writeOpcode(OpCode.CONSTANT, 10);
+    try chunk.writeByte(@intCast(c2), 10);
+
+    try chunk.writeOpcode(OpCode.LESS, 10);
+
+    // If False, jump 7 bytes: (POP + CONSTANT + byte + PRINT +JUMP + 2 bytes)
+    try chunk.writeOpcode(OpCode.JUMP_IF_FALSE, 10);
+    try chunk.writeByte(0, 1);            // MSB of jump offset
+    try chunk.writeByte(7, 1);            // LSB of jump offset
+
+    // Load the string "yes", print it, jump to the end of the if expression
+    // Jump 4 bytes: (POP + CONSTANT + byte + PRINT)
+    try chunk.writeOpcode(OpCode.POP, 10);
+    try chunk.writeOpcode(OpCode.CONSTANT, 11);
+    try chunk.writeByte(@intCast(yes), 11);
+    try chunk.writeOpcode(OpCode.PRINT, 11);
+    try chunk.writeOpcode(OpCode.JUMP, 11);
+    try chunk.writeByte(0, 1);            // MSB of jump offset
+    try chunk.writeByte(4, 1);            // LSB of jump offset
+
+    // Load the string "no" onto the stack
+    try chunk.writeOpcode(OpCode.POP, 10);
+    try chunk.writeOpcode(OpCode.CONSTANT, 12);
+    try chunk.writeByte(@intCast(no), 12);
+    try chunk.writeOpcode(OpCode.PRINT, 12);
+
+    try chunk.writeOpcode(OpCode.RETURN, 12);
 
     return chunk;
 }

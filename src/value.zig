@@ -140,6 +140,25 @@ pub const Value = union(ValueType) {
         return null;
     }
 
+    // Greater than
+    pub fn gt(a: Value, b: Value, allocator: std.mem.Allocator) !?Value {
+        _ = allocator;
+        if (a == .number and b == .number) {
+            return Value.boolean(a.number > b.number);
+        }
+        return null;
+    }
+
+    // Less than
+    pub fn lt(a: Value, b: Value, allocator: std.mem.Allocator) !?Value {
+        _ = allocator;
+        if (a == .number and b == .number) {
+            return Value.boolean(a.number < b.number);
+        }
+        return null;
+    }
+
+
     /// Negate a value
     pub fn negate(self: Value) ?Value {
         return switch (self) {

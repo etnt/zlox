@@ -183,6 +183,18 @@ pub const Chunk = struct {
                     std.debug.print("JUMP              {d} \n", .{jump_offset});
                     return offset + 3; // Increment by 3 because we read opcode + 2 bytes
                 },
+                OpCode.EQUAL => {
+                    std.debug.print("EQUAL             \n", .{});
+                    return offset + 1; // Increment by 1 because we read opcode
+                },
+                OpCode.LESS => {
+                    std.debug.print("LESS              \n", .{});
+                    return offset + 1; // Increment by 1 because we read opcode
+                },
+                OpCode.GREATER => {
+                    std.debug.print("GREATER           \n", .{});
+                    return offset + 1; // Increment by 1 because we read opcode
+                },
                 else => {
                     std.debug.print("Unknown opcode {d}\n", .{instruction});
                     return offset + 1;

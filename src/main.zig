@@ -49,6 +49,8 @@ pub fn main() !void {
         std.debug.print("  3: String concatenation\n", .{});
         std.debug.print("  4: Arithmetic operations\n", .{});
         std.debug.print("  5: If-Then-Else operations\n", .{});
+        std.debug.print("  6: If-Greater-Than\n", .{});
+        std.debug.print("  7: If-Less-Than\n", .{});
         return;
     }
 
@@ -77,6 +79,14 @@ pub fn main() !void {
         5 => blk: {
             ex_name = "if <bool> then 3 else 7";
             break :blk try ex.if_then_else(allocator);
+        },
+        6 => blk: {
+            ex_name = "if (3.0 > 7.0) then print(\"Yes\") else print(\"No\")";
+            break :blk try ex.if_gt(allocator);
+        },
+        7 => blk: {
+            ex_name = "if (3.0 < 7.0) then print(\"Yes\") else print(\"No\")";
+            break :blk try ex.if_lt(allocator);
         },
         else => {
             std.debug.print("Invalid example number. Use --help to see available examples.\n", .{});

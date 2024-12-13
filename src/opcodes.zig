@@ -22,6 +22,9 @@ pub const OpCode = struct {
     pub const GET_LOCAL: u8 = 0x13;        // Get a local variable (1 byte operand)
     pub const JUMP_IF_FALSE: u8 = 0x14;    // Jump if false (2 byte operand)
     pub const JUMP: u8 = 0x15;             // Jump unconditionally (2 byte operand)
+    pub const EQUAL: u8 = 0x16;            // Equality test
+    pub const LESS: u8 = 0x17;             // Less than test
+    pub const GREATER: u8 = 0x18;          // Greater than test
 
     // Convert opcode value to name
     pub fn getName(code: u8) []const u8 {
@@ -48,6 +51,9 @@ pub const OpCode = struct {
             GET_LOCAL => "GET_LOCAL",
             JUMP_IF_FALSE => "JUMP_IF_FALSE",
             JUMP => "JUMP",
+            EQUAL => "EQUAL",
+            LESS => "LESS",
+            GREATER => "GREATER",
             else => "UNKNOWN",
         };
     }
@@ -76,5 +82,9 @@ test "opcode names" {
     try std.testing.expectEqualStrings("SET_LOCAL", OpCode.getName(OpCode.SET_LOCAL));
     try std.testing.expectEqualStrings("GET_LOCAL", OpCode.getName(OpCode.GET_LOCAL));
     try std.testing.expectEqualStrings("JUMP_IF_FALSE", OpCode.getName(OpCode.JUMP_IF_FALSE));
+    try std.testing.expectEqualStrings("JUMP", OpCode.getName(OpCode.JUMP));
+    try std.testing.expectEqualStrings("EQUAL", OpCode.getName(OpCode.EQUAL));
+    try std.testing.expectEqualStrings("LESS", OpCode.getName(OpCode.LESS));
+    try std.testing.expectEqualStrings("GREATER", OpCode.getName(OpCode.GREATER));
     try std.testing.expectEqualStrings("UNKNOWN", OpCode.getName(0xFF));
 }

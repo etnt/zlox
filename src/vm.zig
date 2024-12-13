@@ -455,6 +455,35 @@ pub const VM = struct {
                     const jump_offset = (@as(u16, msb) << 8) | @as(u16, lsb);
                     self.ip += jump_offset;
                 },
+                OpCode.EQUAL => {
+                    const right = self.pop() catch |err| {
+                        std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
+                    const left = self.pop() catch |err| {
+                        std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
+                    if (Value.equals(left, right)) {
+                        self.push(Value.boolean(true)) catch |err| {
+                            std.debug.print("Error pushing true: {s}\n", .{@errorName(err)});
+                            return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                        };
+                    } else {
+                        self.push(Value.boolean(false)) catch |err| {
+                            std.debug.print("Error pushing false: {s}\n", .{@errorName(err)});
+                            return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                        };
+                    }
+                },
+                OpCode.LESS => {
+                    const result = self.binary_op(Value.lt);
+                    if (result != InterpretResult.INTERPRET_OK) return result;
+                },
+                OpCode.GREATER => {
+                    const result = self.binary_op(Value.gt);
+                    if (result != InterpretResult.INTERPRET_OK) return result;
+                },
                 else => {
                     std.debug.print("Unknown opcode {d}\n", .{opcode});
                     return InterpretResult.INTERPRET_RUNTIME_ERROR;
