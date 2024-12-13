@@ -138,17 +138,46 @@ pub fn if_then_else(allocator: std.mem.Allocator) !Chunk {
 
     try chunk.writeOpcode(OpCode.JUMP_IF_FALSE, 1);
     try chunk.writeByte(0, 1);            // MSB of jump offset
-    try chunk.writeByte(3, 1);            // LSB of jump offset (skip next 3 instructions)
+    try chunk.writeByte(5, 1);            // LSB of jump offset (skip next 6 instructions)
 
-    // Jump over this part (3 instructions: CONSTANT + byte, PRINT)
+    // Do Jump over this part (5 instructions: CONSTANT + byte + JUMP + 2 bytes)
     try chunk.writeOpcode(OpCode.CONSTANT, 1);
     try chunk.writeByte(@intCast(c1), 1);
-    try chunk.writeOpcode(OpCode.PRINT, 1);
+    try chunk.writeOpcode(OpCode.JUMP, 1);
+    try chunk.writeByte(0, 1);            // MSB of jump offset
+    try chunk.writeByte(2, 1);            // LSB of jump offset (skip next 3 instructions)
 
     // We should land here
     try chunk.writeOpcode(OpCode.CONSTANT, 1);
     try chunk.writeByte(@intCast(c2), 1);
+
+    // Print the result!
     try chunk.writeOpcode(OpCode.PRINT, 1);
+
+
+    // Now test JUMP_IF_FALSE with different falsey values
+    try chunk.writeOpcode(OpCode.TRUE, 1);
+
+    try chunk.writeOpcode(OpCode.JUMP_IF_FALSE, 1);
+    try chunk.writeByte(0, 1);            // MSB of jump offset
+    try chunk.writeByte(5, 1);            // LSB of jump offset (skip next 6 instructions)
+
+    // Do *not* Jump over this part (5 instructions: CONSTANT + byte + JUMP + 2 bytes)
+    try chunk.writeOpcode(OpCode.CONSTANT, 1);
+    try chunk.writeByte(@intCast(c1), 1);
+    try chunk.writeOpcode(OpCode.JUMP, 1);
+    try chunk.writeByte(0, 1);            // MSB of jump offset
+    try chunk.writeByte(2, 1);            // LSB of jump offset (skip next 2 instructions)
+
+    // We should jump over these instructions (2 instructions: CONSTANT + byte)
+    try chunk.writeOpcode(OpCode.CONSTANT, 1);
+    try chunk.writeByte(@intCast(c2), 1);
+
+    // We should land here; print the result!
+    try chunk.writeOpcode(OpCode.PRINT, 1);
+
+
+   
 
     try chunk.writeOpcode(OpCode.RETURN, 2);
 

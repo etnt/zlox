@@ -175,6 +175,14 @@ pub const Chunk = struct {
                     std.debug.print("JUMP_IF_FALSE     {d} \n", .{jump_offset});
                     return offset + 3; // Increment by 3 because we read opcode + 2 bytes
                 },
+                OpCode.JUMP => {
+                    // Note: Two byte operands forms the offset
+                    const msb = self.code.at(offset + 1).?;
+                    const lsb = self.code.at(offset + 2).?;
+                    const jump_offset = (@as(u16, msb) << 8) | @as(u16, lsb);
+                    std.debug.print("JUMP              {d} \n", .{jump_offset});
+                    return offset + 3; // Increment by 3 because we read opcode + 2 bytes
+                },
                 else => {
                     std.debug.print("Unknown opcode {d}\n", .{instruction});
                     return offset + 1;

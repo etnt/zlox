@@ -445,6 +445,16 @@ pub const VM = struct {
                         self.ip += jump_offset;
                     }
                 },
+                OpCode.JUMP => {
+                    // Read the two bytes that form the jump offset
+                    const msb = self.ip[0];
+                    const lsb = self.ip[1];
+                    self.ip += 2; // Advance past the two bytes
+
+                    // Jump to the offset
+                    const jump_offset = (@as(u16, msb) << 8) | @as(u16, lsb);
+                    self.ip += jump_offset;
+                },
                 else => {
                     std.debug.print("Unknown opcode {d}\n", .{opcode});
                     return InterpretResult.INTERPRET_RUNTIME_ERROR;

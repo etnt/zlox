@@ -21,6 +21,7 @@ pub const OpCode = struct {
     pub const SET_LOCAL: u8 = 0x12;        // Set a local variable (1 byte operand)
     pub const GET_LOCAL: u8 = 0x13;        // Get a local variable (1 byte operand)
     pub const JUMP_IF_FALSE: u8 = 0x14;    // Jump if false (2 byte operand)
+    pub const JUMP: u8 = 0x15;             // Jump unconditionally (2 byte operand)
 
     // Convert opcode value to name
     pub fn getName(code: u8) []const u8 {
@@ -46,6 +47,7 @@ pub const OpCode = struct {
             SET_LOCAL => "SET_LOCAL",
             GET_LOCAL => "GET_LOCAL",
             JUMP_IF_FALSE => "JUMP_IF_FALSE",
+            JUMP => "JUMP",
             else => "UNKNOWN",
         };
     }

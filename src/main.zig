@@ -75,7 +75,7 @@ pub fn main() !void {
             break :blk try ex.arithmetics(allocator);
         },
         5 => blk: {
-            ex_name = "if True then 3 else 7";
+            ex_name = "if <bool> then 3 else 7";
             break :blk try ex.if_then_else(allocator);
         },
         else => {
