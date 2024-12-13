@@ -13,14 +13,14 @@ pub const InterpretResult = enum(u8) {
 };
 
 pub const VM = struct {
-    chunk: *Chunk,                      // Chunk to interpret
-    ip: [*]u8,                          // Instruction pointer
-    trace: bool = false,                // Enable tracing
-    slow: bool = false,                 // Run slow for "animated" effect
-    allocator: std.mem.Allocator,       // Allocator for dynamic memory
-    stack: std.ArrayList(Value),        // Dynamic stack
-    sp: usize = 0,                      // Stack pointer
-    globals: std.StringHashMap(Value),  // Global variables
+    chunk: *Chunk, // Chunk to interpret
+    ip: [*]u8, // Instruction pointer
+    trace: bool = false, // Enable tracing
+    slow: bool = false, // Run slow for "animated" effect
+    allocator: std.mem.Allocator, // Allocator for dynamic memory
+    stack: std.ArrayList(Value), // Dynamic stack
+    sp: usize = 0, // Stack pointer
+    globals: std.StringHashMap(Value), // Global variables
 
     /// Initialize a new VM with a pre-existing chunk
     pub fn init(chunk: *Chunk, trace: bool, allocator: std.mem.Allocator) VM {
@@ -235,6 +235,7 @@ pub const VM = struct {
                 // Print the stack before each instruction
                 self.printStack();
                 const offset = @intFromPtr(self.ip) - @intFromPtr(self.chunk.code.bytes.items.ptr);
+                std.debug.print("{d:0>4}   ", .{ offset});
                 _ = self.chunk.disassembleInstruction(offset);
             }
 
@@ -247,7 +248,6 @@ pub const VM = struct {
                         std.debug.print("Error pushing nil: {s}\n", .{@errorName(err)});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
-
                 },
                 OpCode.CONSTANT => {
                     self.push(self.chunk.constants.at(self.ip[0]).?) catch |err| {
@@ -420,6 +420,30 @@ pub const VM = struct {
                         std.debug.print("Error pushing local value: {s}\n", .{@errorName(err)});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
+                },
+                OpCode.JUMP_IF_FALSE => {
+                    // Read the two bytes that form the jump offset
+                    const msb = self.ip[0];
+                    const lsb = self.ip[1];
+                    self.ip += 2; // Advance past the two bytes
+
+                    // Pop the condition value
+                    const condition = self.peek(0) catch |err| {
+                        std.debug.print("Error popping condition value: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
+
+                    // Check if we should jump
+                    const is_falsey = condition.isFalsey() catch |err| {
+                        std.debug.print("Invalid condition type for JUMP_IF_FALSE: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
+
+                    // Maybe jump to the offset
+                    if (is_falsey == 1) {
+                        const jump_offset = (@as(u16, msb) << 8) | @as(u16, lsb);
+                        self.ip += jump_offset;
+                    }
                 },
                 else => {
                     std.debug.print("Unknown opcode {d}\n", .{opcode});

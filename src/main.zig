@@ -48,6 +48,7 @@ pub fn main() !void {
         std.debug.print("  2: Global variable assignment\n", .{});
         std.debug.print("  3: String concatenation\n", .{});
         std.debug.print("  4: Arithmetic operations\n", .{});
+        std.debug.print("  5: If-Then-Else operations\n", .{});
         return;
     }
 
@@ -72,6 +73,10 @@ pub fn main() !void {
         4 => blk: {
             ex_name = "arithmetics";
             break :blk try ex.arithmetics(allocator);
+        },
+        5 => blk: {
+            ex_name = "if True then 3 else 7";
+            break :blk try ex.if_then_else(allocator);
         },
         else => {
             std.debug.print("Invalid example number. Use --help to see available examples.\n", .{});
@@ -247,7 +252,6 @@ test "boolean operations" {
     try std.testing.expectEqual(Value.boolean(false), and_result);
 }
 
-// To run only this test: zig test src/main.zig  --test-filter "mixed operations"
 test "mixed operations" {
     var chunk = Chunk.init(std.testing.allocator);
     defer chunk.deinit();
@@ -267,4 +271,62 @@ test "mixed operations" {
     var vm = VM.init(&chunk, false, std.testing.allocator);
     defer vm.deinit();
     try std.testing.expectEqual(InterpretResult.INTERPRET_RUNTIME_ERROR, vm.interpret());
+}
+
+test "conditional jumps" {
+    const allocator = std.testing.allocator;
+    const ex_hdr ="Conditional Jumps";
+    const ex_name = "conditional jumps";
+
+    var chunk = Chunk.init(allocator);
+    defer chunk.deinit();
+
+    // Test with false boolean (should jump)
+    try chunk.writeOpcode(OpCode.FALSE, 1);
+    try chunk.writeOpcode(OpCode.JUMP_IF_FALSE, 1);
+    try chunk.writeByte(0, 1);  // MSB of jump offset
+    try chunk.writeByte(1, 1);  // LSB of jump offset (skip next instruction)
+    try chunk.writeOpcode(OpCode.TRUE, 1);  // This should be skipped
+    try chunk.writeOpcode(OpCode.FALSE, 1); // We should jump here
+
+    // Test with another false boolean (should jump)
+    try chunk.writeOpcode(OpCode.FALSE, 1);
+    try chunk.writeOpcode(OpCode.JUMP_IF_FALSE, 1);
+    try chunk.writeByte(0, 1);  // MSB of jump offset
+    try chunk.writeByte(1, 1);  // LSB of jump offset (skip next instruction)
+    try chunk.writeOpcode(OpCode.TRUE, 1);  // This should be skipped
+    try chunk.writeOpcode(OpCode.FALSE, 1); // We should jump here
+
+    // Test with true boolean (should not jump)
+    try chunk.writeOpcode(OpCode.TRUE, 1);
+    try chunk.writeOpcode(OpCode.JUMP_IF_FALSE, 1);
+    try chunk.writeByte(0, 1);  // MSB of jump offset
+    try chunk.writeByte(1, 1);  // LSB of jump offset (skip next instruction)
+    try chunk.writeOpcode(OpCode.TRUE, 1);  // This should NOT be skipped
+    try chunk.writeOpcode(OpCode.FALSE, 1);
+
+    try chunk.writeOpcode(OpCode.RETURN, 1);
+
+    // Disassemble the chunk to see its contents
+    const ex_header = try std.fmt.allocPrint(allocator, "{s}{s}", .{ ex_hdr, ex_name });
+    defer allocator.free(ex_header);
+    std.debug.print("\nChunk Disassembly:\n", .{});
+    chunk.disassemble(ex_header);
+
+    // Create VM and interpret
+    var vm = VM.init(&chunk, true, std.testing.allocator);
+    defer vm.deinit();
+    try std.testing.expectEqual(InterpretResult.INTERPRET_OK, vm.interpret());
+
+    // The stack should contain the results of our jumps
+    // [false, false, true, false]
+    const result4 = try vm.peek(0);  // Last pushed value
+    const result3 = try vm.peek(1);  // Result of true test (should be true)
+    const result2 = try vm.peek(2);  // Result of false test (should be false)
+    const result1 = try vm.peek(3);  // Result of false test (should be false)
+
+    try std.testing.expectEqual(Value.boolean(false), result1);  // false test jumped
+    try std.testing.expectEqual(Value.boolean(true), result2);  // false test jumped
+    try std.testing.expectEqual(Value.boolean(true), result3);   // true didn't jump
+    try std.testing.expectEqual(Value.boolean(false), result4);  // last value pushed
 }

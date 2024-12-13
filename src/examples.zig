@@ -125,3 +125,32 @@ pub fn arithmetics(allocator: std.mem.Allocator) !Chunk {
 
     return chunk;
 }
+
+pub fn if_then_else(allocator: std.mem.Allocator) !Chunk {
+    var chunk = Chunk.init(allocator);
+
+    // Add constants
+    const c1 = try chunk.addConstant(Value.number(3.0));
+    const c2 = try chunk.addConstant(Value.number(7.0));
+
+    // Setup instructions
+    try chunk.writeOpcode(OpCode.FALSE, 1);
+
+    try chunk.writeOpcode(OpCode.JUMP_IF_FALSE, 1);
+    try chunk.writeByte(0, 1);            // MSB of jump offset
+    try chunk.writeByte(3, 1);            // LSB of jump offset (skip next 3 instructions)
+
+    // Jump over this part (3 instructions: CONSTANT + byte, PRINT)
+    try chunk.writeOpcode(OpCode.CONSTANT, 1);
+    try chunk.writeByte(@intCast(c1), 1);
+    try chunk.writeOpcode(OpCode.PRINT, 1);
+
+    // We should land here
+    try chunk.writeOpcode(OpCode.CONSTANT, 1);
+    try chunk.writeByte(@intCast(c2), 1);
+    try chunk.writeOpcode(OpCode.PRINT, 1);
+
+    try chunk.writeOpcode(OpCode.RETURN, 2);
+
+    return chunk;
+}

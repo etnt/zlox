@@ -4,7 +4,12 @@ A bytecode virtual machine implementation in Zig, based on [Crafting Interpreter
 
 ## Demo
 
-<img src="demo/globalvars.gif" width="600">
+<table>
+  <tr>
+    <td><img src="demo/globalvars.gif" width="500"></td>
+    <td><img src="demo/jump.gif" width="500"></td>
+  </tr>
+</table>
 
 ## Features
 

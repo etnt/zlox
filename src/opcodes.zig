@@ -1,7 +1,7 @@
 // Operation codes as single-byte constants
 pub const OpCode = struct {
     pub const NIL: u8      = 0x00;         // Push null onto the stack
-    pub const CONSTANT: u8 = 0x01;         // Instruction to "produce" a constant value
+    pub const CONSTANT: u8 = 0x01;         // Instruction to "produce" a constant value (1 byte operand)
     pub const ADD: u8      = 0x02;         // Add two values
     pub const SUB: u8      = 0x03;         // Subtract two values
     pub const MUL: u8      = 0x04;         // Multiply two values
@@ -16,10 +16,11 @@ pub const OpCode = struct {
     pub const PRINT: u8    = 0x0D;         // Print a value
     pub const POP: u8      = 0x0E;         // Pop a value from the stack
     pub const DEFINE_GLOBAL: u8 = 0x0F;    // Define a global variable
-    pub const SET_GLOBAL: u8 = 0x10;       // Set a global variable
-    pub const GET_GLOBAL: u8 = 0x11;       // Get a global variable
-    pub const SET_LOCAL: u8 = 0x12;        // Set a local variable
-    pub const GET_LOCAL: u8 = 0x13;        // Get a local variable
+    pub const SET_GLOBAL: u8 = 0x10;       // Set a global variable (1 byte operand)
+    pub const GET_GLOBAL: u8 = 0x11;       // Get a global variable (1 byte operand)
+    pub const SET_LOCAL: u8 = 0x12;        // Set a local variable (1 byte operand)
+    pub const GET_LOCAL: u8 = 0x13;        // Get a local variable (1 byte operand)
+    pub const JUMP_IF_FALSE: u8 = 0x14;    // Jump if false (2 byte operand)
 
     // Convert opcode value to name
     pub fn getName(code: u8) []const u8 {
@@ -44,6 +45,7 @@ pub const OpCode = struct {
             GET_GLOBAL => "GET_GLOBAL",
             SET_LOCAL => "SET_LOCAL",
             GET_LOCAL => "GET_LOCAL",
+            JUMP_IF_FALSE => "JUMP_IF_FALSE",
             else => "UNKNOWN",
         };
     }
@@ -71,5 +73,6 @@ test "opcode names" {
     try std.testing.expectEqualStrings("GET_GLOBAL", OpCode.getName(OpCode.GET_GLOBAL));
     try std.testing.expectEqualStrings("SET_LOCAL", OpCode.getName(OpCode.SET_LOCAL));
     try std.testing.expectEqualStrings("GET_LOCAL", OpCode.getName(OpCode.GET_LOCAL));
+    try std.testing.expectEqualStrings("JUMP_IF_FALSE", OpCode.getName(OpCode.JUMP_IF_FALSE));
     try std.testing.expectEqualStrings("UNKNOWN", OpCode.getName(0xFF));
 }

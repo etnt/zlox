@@ -48,6 +48,19 @@ pub const Value = union(ValueType) {
         }
     }
 
+    pub const IsFalseyError = error{
+        InvalidType,
+    };
+
+    /// Check if a value is falsey according to Lox rules
+    /// Only boolean values are valid for conditional jumps
+    pub fn isFalsey(self: Value) IsFalseyError!u1 {
+        return switch (self) {
+            .boolean => |b| if (!b) 1 else 0,
+            else => IsFalseyError.InvalidType,
+        };
+    }
+
     /// Create a null value
     pub fn nil() Value {
         return .{ .nil = {} };
@@ -462,4 +475,22 @@ test "ValueArray - contains" {
     try std.testing.expect(array.contains(str));
     try std.testing.expect(!array.contains(Value.number(2.0)));
     try std.testing.expect(!array.contains(Value.boolean(false)));
+}
+
+test "Value - isFalsey" {
+    try std.testing.expectError(Value.IsFalseyError.InvalidType, Value.nil().isFalsey());
+    try std.testing.expectEqual(@as(u1, 1), try Value.boolean(false).isFalsey());
+    try std.testing.expectEqual(@as(u1, 0), try Value.boolean(true).isFalsey());
+    try std.testing.expectError(Value.IsFalseyError.InvalidType, Value.number(0).isFalsey());
+    try std.testing.expectError(Value.IsFalseyError.InvalidType, Value.number(1).isFalsey());
+    
+    const allocator = std.testing.allocator;
+    const str = try Value.createString(allocator, "test");
+    defer if (str.string) |str_ptr| {
+        str_ptr.deinit(allocator);
+    };
+    try std.testing.expectError(Value.IsFalseyError.InvalidType, str.isFalsey());
+    
+    // Clean up the intern pool after all strings are freed
+    defer obj.deinitInternPool();
 }

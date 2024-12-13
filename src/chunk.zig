@@ -11,7 +11,7 @@ pub const Chunk = struct {
     code: ByteArray,
 
     // Each chunk will carry with it a list of the values that appear as
-    // literals in the program. To keep things simpler, we’ll put all
+    // literals in the program. To keep things simpler, we'll put all
     // constants in here, even simple integers.
     constants: ValueArray,
 
@@ -165,7 +165,15 @@ pub const Chunk = struct {
                 OpCode.GET_LOCAL => {
                     const slot = self.code.at(offset + 1).?;
                     std.debug.print("GET_LOCAL         {d} \n", .{slot});
-                    return offset + 1;
+                    return offset + 2;
+                },
+                OpCode.JUMP_IF_FALSE => {
+                    // Note: Two byte operands forms the offset
+                    const msb = self.code.at(offset + 1).?;
+                    const lsb = self.code.at(offset + 2).?;
+                    const jump_offset = (@as(u16, msb) << 8) | @as(u16, lsb);
+                    std.debug.print("JUMP_IF_FALSE     {d} \n", .{jump_offset});
+                    return offset + 3; // Increment by 3 because we read opcode + 2 bytes
                 },
                 else => {
                     std.debug.print("Unknown opcode {d}\n", .{instruction});
