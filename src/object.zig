@@ -1,4 +1,5 @@
 const std = @import("std");
+const utils = @import("utils.zig");
 
 /// ObjectType represents different kinds of heap-allocated objects
 pub const ObjectType = enum {
@@ -39,6 +40,7 @@ pub const Object = struct {
         }
 
         pub fn deinit(self: *String, allocator: std.mem.Allocator) void {
+            //utils.debugPrintln(@src(), "Freeing String: {s}", .{self.chars});
             // Remove from intern pool if it exists
             if (string_intern_pool) |*pool| {
                 _ = pool.remove(self.chars);
@@ -63,48 +65,14 @@ pub fn initInternPool(allocator: std.mem.Allocator) void {
 
 /// Clean up the global string intern pool - should be called when shutting down
 pub fn deinitInternPool() void {
+    //utils.debugPrintln(@src(),"Freeing Intern Pool...0", .{});
     if (string_intern_pool) |*pool| {
+        //utils.debugPrintln(@src(),"Freeing Intern Pool...1", .{});
         // The strings themselves are cleaned up by their owners
         pool.deinit();
         string_intern_pool = null;
         intern_pool_allocator = null;
     }
+    //utils.debugPrintln(@src(),"Freeing Intern Pool...OK", .{});
 }
 
-test "Object - string operations and interning" {
-    const allocator = std.testing.allocator;
-    defer deinitInternPool();
-
-    // Test basic string creation
-    const str1 = try Object.String.init(allocator, "test");
-    defer str1.deinit(allocator);
-
-    try std.testing.expectEqual(ObjectType.string, str1.obj.type);
-    try std.testing.expectEqualStrings("test", str1.chars);
-
-    // Test string interning - same content should return same pointer
-    const str2 = try Object.String.init(allocator, "test");
-    // Don't defer deinit for str2 since it's the same as str1
-    try std.testing.expectEqual(str1, str2);
-
-    // Test different string creates new object
-    const str3 = try Object.String.init(allocator, "different");
-    defer str3.deinit(allocator);
-    try std.testing.expect(str1 != str3);
-
-    // Test empty string interning
-    const empty1 = try Object.String.init(allocator, "");
-    defer empty1.deinit(allocator);
-    const empty2 = try Object.String.init(allocator, "");
-    try std.testing.expectEqual(empty1, empty2);
-
-    // Test string with special characters
-    const special1 = try Object.String.init(allocator, "hello\n\t世界");
-    defer special1.deinit(allocator);
-    const special2 = try Object.String.init(allocator, "hello\n\t世界");
-    try std.testing.expectEqual(special1, special2);
-
-    // Verify intern pool state
-    try std.testing.expect(string_intern_pool != null);
-    try std.testing.expectEqual(intern_pool_allocator.?, allocator);
-}

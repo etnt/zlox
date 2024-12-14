@@ -4,6 +4,7 @@ const ValueArray = @import("value.zig").ValueArray;
 const Value = @import("value.zig").Value;
 const LineArray = @import("line_array.zig").LineArray;
 const OpCode = @import("opcodes.zig").OpCode;
+const utils = @import("utils.zig");
 
 /// Chunk represents a sequence of bytecode instructions and their associated constant values
 pub const Chunk = struct {
@@ -29,9 +30,13 @@ pub const Chunk = struct {
 
     /// Free the memory used by the Chunk
     pub fn deinit(self: *Chunk) void {
+        //utils.debugPrintln(@src(),"Freeing Chunk...0", .{});
         self.code.deinit();
+        //utils.debugPrintln(@src(),"Freeing Chunk...1", .{});
         self.constants.deinit();
+        //utils.debugPrintln(@src(),"Freeing Chunk...2", .{});
         self.lines.deinit();
+        //utils.debugPrintln(@src(),"Freeing Chunk...OK", .{});
     }
 
     /// Write an opcode to the chunk

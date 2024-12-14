@@ -3,6 +3,7 @@ const Chunk = @import("chunk.zig").Chunk;
 const OpCode = @import("opcodes.zig").OpCode;
 const Value = @import("value.zig").Value;
 const obj = @import("object.zig");
+const utils = @import("utils.zig");
 
 pub const String = obj.Object.String;
 
@@ -36,40 +37,27 @@ pub const VM = struct {
 
     /// Free the VM (does not free the chunk as it's managed elsewhere)
     pub fn deinit(self: *VM) void {
-        // Clean up any temporary strings on the stack
-        for (self.stack.items) |value| {
-            switch (value) {
-                .string => |str| {
-                    if (str) |str_ptr| {
-                        // Only free strings that are not constants
-                        if (!self.chunk.constants.contains(value)) {
-                            str_ptr.deinit(self.allocator);
-                        }
-                    }
-                },
-                else => {},
-            }
-        }
+        //utils.debugPrintln(@src(),"Freeing VM...0", .{});
+        // Clean up the stack and globals, but don't free the strings
+        // since they're managed by the intern pool
+        //utils.debugPrintln(@src(),"Freeing VM...1 (stack)", .{});
         self.stack.deinit();
+        //utils.debugPrintln(@src(),"Freeing VM...2 (globals)", .{});
+        self.globals.deinit();
+        //utils.debugPrintln(@src(),"Freeing VM...3", .{});
 
-        // Clean up globals
-        var it = self.globals.iterator();
-        while (it.next()) |entry| {
-            switch (entry.value_ptr.*) {
-                .string => |str| {
-                    if (str) |str_ptr| {
-                        // Only free strings that are not constants
-                        if (!self.chunk.constants.contains(entry.value_ptr.*)) {
-                            str_ptr.deinit(self.allocator);
-                        }
-                    }
-                },
-                else => {},
+        // Clean up the intern pool which owns all strings
+        //utils.debugPrintln(@src(),"Freeing VM...4", .{});
+        if (obj.string_intern_pool) |*pool| {
+            // Free all strings in the pool
+            var it = pool.iterator();
+            while (it.next()) |entry| {
+                const str = entry.value_ptr.*;
+                str.deinit(self.allocator);
             }
         }
-        self.globals.deinit();
-
         obj.deinitInternPool();
+        //utils.debugPrintln(@src(),"Freeing VM...OK", .{});
         self.* = undefined;
     }
 
@@ -81,20 +69,6 @@ pub const VM = struct {
 
     /// Reset the stack
     pub fn resetStack(self: *VM) void {
-        // Clean up any temporary strings before clearing
-        for (self.stack.items) |value| {
-            switch (value) {
-                .string => |str| {
-                    if (str) |str_ptr| {
-                        // Only free strings that are not constants
-                        if (!self.chunk.constants.contains(value)) {
-                            str_ptr.deinit(self.allocator);
-                        }
-                    }
-                },
-                else => {},
-            }
-        }
         self.stack.clearRetainingCapacity();
     }
 
@@ -180,12 +154,6 @@ pub const VM = struct {
 
         if (result) |value| {
             self.push(value) catch |err| {
-                // Clean up the result if it's a string since we failed to push it
-                if (value == .string) {
-                    if (value.string) |str_ptr| {
-                        str_ptr.deinit(self.allocator);
-                    }
-                }
                 std.debug.print("Error pushing result: {s}\n", .{@errorName(err)});
                 return InterpretResult.INTERPRET_RUNTIME_ERROR;
             };
@@ -211,14 +179,6 @@ pub const VM = struct {
         } else {
             std.debug.print("Invalid operand type for unary operation\n", .{});
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
-        }
-    }
-
-    fn freeValue(self: *VM, value: Value) !void {
-        if (value == .string) {
-            if (value.string) |str_ptr| {
-                str_ptr.deinit(self.allocator);
-            }
         }
     }
 
@@ -311,14 +271,12 @@ pub const VM = struct {
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
                     value.print();
-                    try self.freeValue(value);
                 },
                 OpCode.POP => {
-                    const value = self.pop() catch |err| {
+                    _ = self.pop() catch |err| {
                         std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
-                    try self.freeValue(value);
                 },
                 OpCode.DEFINE_GLOBAL => {
                     const name = self.pop() catch |err| {
