@@ -1,16 +1,57 @@
 const std = @import("std");
+const Chunk = @import("chunk.zig").Chunk;
 const utils = @import("utils.zig");
 
 /// ObjectType represents different kinds of heap-allocated objects
 pub const ObjectType = enum {
     string,
-    // More object types will be added later (function, class, instance, etc.)
+    function,
+    // More object types will be added later (class, instance, etc.)
 };
 
 /// Object represents any heap-allocated value
 pub const Object = struct {
     type: ObjectType,
     // Add garbage collection fields later
+
+    pub const Function = struct {
+        obj: Object,
+        arity: usize,
+        chunk: Chunk,
+        name: []const u8,
+
+        pub fn init(allocator: std.mem.Allocator, name: []const u8, arity: usize, chunk: Chunk) !*Function {
+
+            // Create a new function object
+            const function = try allocator.create(Function);
+            function.obj = .{ .type = .function };
+            function.arity = arity;
+            function.chunk = chunk;
+            function.name = try allocator.dupe(u8, name);
+
+            return function;
+        }
+
+        pub fn deinit(self: *Function, allocator: std.mem.Allocator) void {
+            //utils.debugPrintln(@src(), "Freeing Function: {s}", .{self.name});
+            allocator.free(self.name);
+            self.chunk.deinit();
+            allocator.destroy(self);
+        }
+
+        pub fn set_name(self: *Function, allocator: std.mem.Allocator, name: []const u8) void {
+            self.name = try allocator.dupe(u8, name);
+        }
+
+        pub fn set_arity(self: *Function, arity: usize) void {
+            self.arity = arity;
+        }
+
+        pub fn set_chunk(self: *Function, chunk: *Chunk) void {
+            self.chunk = chunk;
+        }
+
+    };
 
     /// String object type
     pub const String = struct {

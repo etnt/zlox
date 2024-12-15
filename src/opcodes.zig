@@ -26,6 +26,8 @@ pub const OpCode = struct {
     pub const LESS: u8 = 0x17;             // Less than test
     pub const GREATER: u8 = 0x18;          // Greater than test
     pub const LOOP: u8 = 0x19;             // Loop works like JUMP but jump backward
+    pub const CALL: u8 = 0x1A;             // Call a function (1 byte operand) argCount
+
 
     // Convert opcode value to name
     pub fn getName(code: u8) []const u8 {
@@ -56,6 +58,7 @@ pub const OpCode = struct {
             LESS => "LESS",
             GREATER => "GREATER",
             LOOP => "LOOP",
+            CALL => "CALL",
             else => "UNKNOWN",
         };
     }
@@ -89,5 +92,6 @@ test "opcode names" {
     try std.testing.expectEqualStrings("LESS", OpCode.getName(OpCode.LESS));
     try std.testing.expectEqualStrings("GREATER", OpCode.getName(OpCode.GREATER));
     try std.testing.expectEqualStrings("LOOP", OpCode.getName(OpCode.LOOP));
+    try std.testing.expectEqualStrings("CALL", OpCode.getName(OpCode.CALL));
     try std.testing.expectEqualStrings("UNKNOWN", OpCode.getName(0xFF));
 }

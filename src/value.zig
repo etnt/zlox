@@ -1,13 +1,15 @@
 const std = @import("std");
 const obj = @import("object.zig");
 const utils = @import("utils.zig");
+const Chunk = @import("chunk.zig").Chunk;
 
 pub const ObjectType = obj.ObjectType;
 pub const Object = obj.Object;
 pub const String = obj.Object.String;
+pub const Function = obj.Object.Function;
 
 /// ValueType represents the different types of values our VM can handle
-pub const ValueType = enum { nil, number, boolean, object, string };
+pub const ValueType = enum { nil, number, boolean, object, string, function };
 
 /// Value represents a constant value in our bytecode
 pub const Value = union(ValueType) {
@@ -16,6 +18,7 @@ pub const Value = union(ValueType) {
     boolean: bool,
     object: ?*Object,
     string: ?*String,
+    function: ?*Function,
 
     /// Print a value
     pub fn print(self: Value) void {
@@ -30,6 +33,13 @@ pub const Value = union(ValueType) {
                     std.debug.print("null string", .{});
                 }
             },
+            .function => |f| {
+                if (f) |func_ptr| {
+                    std.debug.print("Function: {s}", .{func_ptr.name});
+                } else {
+                    std.debug.print("null function", .{});
+                }
+            },
             .object => |o| {
                 if (o) |obj_ptr| {
                     switch (obj_ptr.type) {
@@ -39,6 +49,15 @@ pub const Value = union(ValueType) {
                                 std.debug.print("{s}", .{string_data.chars});
                             } else {
                                 std.debug.print("Alignment error: Cannot cast to String\n", .{});
+                            }
+                        },
+                        .function => {
+                            // Print function name
+                            if (@alignOf(Function) <= @alignOf(Object)) {
+                                const function_data: *Function = @alignCast(obj_ptr);
+                                std.debug.print("{s}", .{function_data.name});
+                            } else {
+                                std.debug.print("Alignment error: Cannot cast to Function\n", .{});
                             }
                         },
                     }
@@ -86,6 +105,11 @@ pub const Value = union(ValueType) {
     pub fn createString(allocator: std.mem.Allocator, chars: []const u8) !Value {
         const str = try String.init(allocator, chars);
         return Value{ .string = str };
+    }
+
+    pub fn createFunction(allocator: std.mem.Allocator, name: []const u8, arity: usize, chunk: Chunk) !Value {
+        const func = try Function.init(allocator, name, arity, chunk);
+        return Value{ .function = func };
     }
 
     /// Add two values
@@ -166,7 +190,7 @@ pub const Value = union(ValueType) {
         return switch (self) {
             .number => |n| Value.number(-n),
             .nil, 
-            .boolean, .string, .object => null,
+            .boolean, .string, .function, .object => null,
         };
     }
 
@@ -192,7 +216,7 @@ pub const Value = union(ValueType) {
     pub fn not(self: Value) ?Value {
         return switch (self) {
             .boolean => |b| Value.boolean(!b),
-            .nil, .number, .string, .object => null,
+            .nil, .number, .string, .function, .object => null,
         };
     }
 
@@ -211,6 +235,7 @@ pub const Value = union(ValueType) {
                 // Since strings are interned, we can just compare pointers
                 return str_a == str_b;
             },
+            .function => |func_a| b.function == func_a,  // FIXME: compare function pointers?
             .object => |obj_a| b.object == obj_a,
         };
     }
@@ -225,6 +250,7 @@ pub const Value = union(ValueType) {
                 const new_str = try String.init(allocator, str.chars);
                 return Value{ .string = new_str };
             } else Value{ .string = null },
+            .function => |f| Value{ .function = f },    // FIXME - clone function
             .object => |o| Value{ .object = o },
         };
     }
@@ -244,13 +270,19 @@ pub const ValueArray = struct {
     }
 
     /// Free the memory used by the ValueArray.
-    /// Note: Does not free strings as they are owned by the VM's intern pool
     pub fn deinit(self: *ValueArray) void {
-        //utils.debugPrintln(@src(),"Freeing ValueArray...0", .{});
-        // We don't free strings here as they are owned by the VM's intern pool
-        //utils.debugPrintln(@src(),"Freeing ValueArray...1", .{});
+        // Clean up any Function values before deiniting the array
+        for (self.values.items) |value| {
+            switch (value) {
+                .function => |maybe_func| {
+                    if (maybe_func) |func| {
+                        func.deinit(self.allocator);
+                    }
+                },
+                else => {},
+            }
+        }
         self.values.deinit();
-        //utils.debugPrintln(@src(),"Freeing ValueArray...OK", .{});
     }
 
     /// Add a value to the array and return its index

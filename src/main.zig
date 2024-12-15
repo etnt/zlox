@@ -9,20 +9,23 @@ const vm_mod = @import("vm.zig");
 const InterpretResult = vm_mod.InterpretResult;
 const obj = @import("object.zig");
 const ex: type = @import("examples.zig");
+const exfun: type = @import("examples_functions.zig");
 
-pub fn main() !void {
+pub fn main() !u8 {
     // Get a general purpose allocator
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
     const ex_hdr = "Example: ";
     var run_slow = false;
+    var run_trace = false;
     var ex_name: []const u8 = undefined;
 
     const params = comptime clap.parseParamsComptime(
         \\-h, --help             Display this help and exit.
         \\-x, --example <usize>  Choose example to run
         \\-s, --slow             Run slow (for animated effect)
+        \\-t, --trace            Trace the execution
         \\
     );
 
@@ -33,7 +36,7 @@ pub fn main() !void {
     }) catch |err| {
         // Report useful error and exit.
         diag.report(std.io.getStdErr().writer(), err) catch {};
-        return err;
+        return 1;
     };
     defer res.deinit();
 
@@ -43,6 +46,7 @@ pub fn main() !void {
         std.debug.print("  -h, --help             Display this help and exit\n", .{});
         std.debug.print("  -x, --example <usize>  Choose example to run (1-4)\n", .{});
         std.debug.print("  -s, --slow             Run slow (for animated effect)\n", .{});
+        std.debug.print("  -t, --trace            Trace the execution\n", .{});
         std.debug.print("\nExamples:\n", .{});
         std.debug.print("  1: Local variable assignment\n", .{});
         std.debug.print("  2: Global variable assignment\n", .{});
@@ -52,8 +56,14 @@ pub fn main() !void {
         std.debug.print("  6: If-Greater-Than\n", .{});
         std.debug.print("  7: If-Less-Than\n", .{});
         std.debug.print("  8: while loop\n", .{});
-        return;
+        std.debug.print("  9: for loop\n", .{});
+        std.debug.print(" 10: function call (sum)\n", .{});
+        std.debug.print(" 11: function call (factorial)\n", .{});
+        return 0;
     }
+
+    if (res.args.trace != 0)
+        run_trace = true;
 
     if (res.args.slow != 0)
         run_slow = true;
@@ -97,37 +107,62 @@ pub fn main() !void {
             ex_name = "\nfor (i = 0; i < 3; i = i + 1) {\n  print i\n}\nprint \"Done!\"";
             break :blk try ex.for_loop(allocator);
         },
+        10=> blk: {
+            ex_name = "\nfunc sum(a, b, c) {\n  return a + b + c\n}\nprint 4 + sum(5, 6, 7)";
+            break :blk try exfun.function_sum(allocator);
+        },
+        11=> blk: {
+            ex_name = "\nfunc factorial(n) {\n  if (n == 0) return 1\n  return n * factorial(n - 1)\n}\nprint factorial(5)";
+            break :blk try exfun.function_factorial(allocator);
+        },
         else => {
             std.debug.print("Invalid example number. Use --help to see available examples.\n", .{});
-            return;
+            return 1;
         },
     };
     defer {
         example.deinit();
     }
 
-    // Disassemble the chunk to see its contents
-    const ex_header = try std.fmt.allocPrint(allocator, "{s}{s}", .{ ex_hdr, ex_name });
-    defer allocator.free(ex_header);
-    std.debug.print("\nChunk Disassembly:\n", .{});
-    example.disassemble(ex_header);
+    if (run_trace) {
+        // Disassemble the chunk to see its contents
+        const ex_header = try std.fmt.allocPrint(allocator, "{s}{s}", .{ ex_hdr, ex_name });
+        defer allocator.free(ex_header);
+        std.debug.print("\nChunk Disassembly:\n", .{});
+        example.disassemble(ex_header);
+    }
 
     // Create and initialize a VM with tracing enabled
-    var vm = VM.init(&example, true, allocator);
+    var vm = try VM.init(&example, run_trace, allocator);
     defer {
         vm.deinit();
     }
 
-    // Make it go sloow...
+    // Make it go slooow ?
     _ = vm.set_slow(run_slow);
 
     // Interpret the code
-    std.debug.print("\nInterpreting Code:\n", .{});
+    if (run_trace)
+        std.debug.print("\nInterpreting Code:\n", .{});
     const result = vm.interpret();
-    std.debug.print("\nInterpretation result: {}\n", .{result});
 
     // Print the global variables
-    std.debug.print("\nGlobal Variables:\n", .{});
-    vm.printGlobals();
-    std.debug.print("\n", .{});
+    if (run_trace) {
+        std.debug.print("\nGlobal Variables:\n", .{});
+        vm.printGlobals();
+        std.debug.print("\n", .{});
+    }
+
+    switch (result) {
+        .INTERPRET_OK => {
+            if (run_trace)
+                std.debug.print("Interpretation result: OK\n", .{});
+            return 0;
+        },
+        else => |err| {
+            if (run_trace)
+                std.debug.print("Interpretation result: {}\n", .{err});
+            return 1;
+        },
+    }
 }

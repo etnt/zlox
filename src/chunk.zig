@@ -58,7 +58,7 @@ pub const Chunk = struct {
 
     /// Print the contents of the chunk with both opcodes and constants
     pub fn disassemble(self: *const Chunk, name: []const u8) void {
-        std.debug.print("== {s} ==\n\n", .{name});
+        std.debug.print("\n== {s} ==\n\n", .{name});
         std.debug.print("Address  Line OpCode            Value\n", .{});
         std.debug.print("-------- ---- ----------------- --------\n", .{});
 
@@ -74,6 +74,19 @@ pub const Chunk = struct {
             }
 
             offset = self.disassembleInstruction(offset);
+        }
+
+        // After disassembling this chunk, look for any function chunks in the constants
+        for (self.constants.values.items) |value| {
+            switch (value) {
+                .function => |maybe_func| {
+                    if (maybe_func) |func| {
+                        std.debug.print("\n", .{});
+                        func.chunk.disassemble(func.name);
+                    }
+                },
+                else => {},
+            }
         }
     }
 
@@ -210,13 +223,18 @@ pub const Chunk = struct {
                     std.debug.print("GREATER           \n", .{});
                     return offset + 1; // Increment by 1 because we read opcode
                 },
+                OpCode.CALL => {
+                    const argCount = self.code.at(offset + 1).?;
+                    std.debug.print("CALL             {d} \n", .{argCount});
+                    return offset + 2; // Increment by 2 because we read opcode and argCount
+                },
                 else => {
-                    std.debug.print("Unknown opcode {d}\n", .{instruction});
+                    utils.debugPrintln(@src(), "Unknown opcode {d}", .{instruction});
                     return offset + 1;
                 },
             }
         } else {
-            std.debug.print("Error: Could not read instruction at offset {d}\n", .{offset});
+            utils.debugPrintln(@src(), "Error: Could not read instruction at offset {d}", .{offset});
             return offset + 1;
         }
     }

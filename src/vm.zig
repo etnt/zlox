@@ -5,12 +5,38 @@ const Value = @import("value.zig").Value;
 const obj = @import("object.zig");
 const utils = @import("utils.zig");
 
+pub const Object = obj.Object;
+pub const Function = obj.Object.Function;
+
 pub const String = obj.Object.String;
 
 pub const InterpretResult = enum(u8) {
     INTERPRET_OK,
     INTERPRET_COMPILE_ERROR,
     INTERPRET_RUNTIME_ERROR,
+};
+
+// A CallFrame represents a single ongoing function call.
+pub const CallFrame = struct {
+    // Function being called, we'll use that to look up
+    // constants and for a few other things.
+    function: *Function,
+    // Instead of storing the return address in the callee's frame,
+    // the caller stores its own ip. When we return from a function,
+    // the VM will jump to the ip of the caller's CallFrame and resume
+    // from there.
+    ip: [*]const u8,
+    // Points into the VM's value stack at the first slot that this
+    // function can use.
+    slots: usize,
+
+    pub fn init(function: *Function, slots: usize) CallFrame {
+        return CallFrame{
+            .function = function,
+            .ip = function.chunk.code.bytes.items.ptr, // FIXME correct ?
+            .slots = slots,
+        };
+    }
 };
 
 pub const VM = struct {
@@ -23,31 +49,55 @@ pub const VM = struct {
     sp: usize = 0, // Stack pointer
     globals: std.StringHashMap(Value), // Global variables
 
-    /// Initialize a new VM with a pre-existing chunk
-    pub fn init(chunk: *Chunk, trace: bool, allocator: std.mem.Allocator) VM {
-        return VM{
+    // Each time a function is called, we create a new CallFrame
+    call_frames: std.ArrayList(CallFrame), // Call frames
+    frame_cnt: usize = 0, // Current frame counter
+
+    /// Initialize a new VM with the top-level chunk in the init call frame
+    pub fn init(chunk: *Chunk, trace: bool, allocator: std.mem.Allocator) !VM {
+        var vm = VM{
             .chunk = chunk,
             .ip = chunk.code.bytes.items.ptr,
             .trace = trace,
             .allocator = allocator,
             .stack = std.ArrayList(Value).init(allocator),
             .globals = std.StringHashMap(Value).init(allocator),
+            .call_frames = std.ArrayList(CallFrame).init(allocator),
+            .frame_cnt = 0,
         };
+
+        // Create a dummy function for the top-level code, but don't take ownership of the chunk
+        const topFunction = try allocator.create(Function);
+        topFunction.* = .{
+            .obj = .{ .type = .function },
+            .arity = 0,
+            .chunk = chunk.*,
+            .name = try allocator.dupe(u8, "script"),
+        };
+
+        // Create and add the initial frame
+        const initFrame = CallFrame.init(topFunction, 0);
+        try vm.call_frames.append(initFrame);
+        vm.frame_cnt = 1; // Note: frame_cnt is 1-based!
+
+        return vm;
     }
 
     /// Free the VM (does not free the chunk as it's managed elsewhere)
     pub fn deinit(self: *VM) void {
-        //utils.debugPrintln(@src(),"Freeing VM...0", .{});
-        // Clean up the stack and globals, but don't free the strings
-        // since they're managed by the intern pool
-        //utils.debugPrintln(@src(),"Freeing VM...1 (stack)", .{});
+        // Clean up all call frames and their functions, but don't free their chunks
+        for (self.call_frames.items) |frame| {
+            // Free only the function's name and the function object itself
+            self.allocator.free(frame.function.name);
+            self.allocator.destroy(frame.function);
+        }
+        self.call_frames.deinit();
+
+        // Clean up the stack and globals
         self.stack.deinit();
-        //utils.debugPrintln(@src(),"Freeing VM...2 (globals)", .{});
         self.globals.deinit();
-        //utils.debugPrintln(@src(),"Freeing VM...3", .{});
 
         // Clean up the intern pool which owns all strings
-        //utils.debugPrintln(@src(),"Freeing VM...4", .{});
         if (obj.string_intern_pool) |*pool| {
             // Free all strings in the pool
             var it = pool.iterator();
@@ -57,7 +107,7 @@ pub const VM = struct {
             }
         }
         obj.deinitInternPool();
-        //utils.debugPrintln(@src(),"Freeing VM...OK", .{});
+
         self.* = undefined;
     }
 
@@ -70,6 +120,8 @@ pub const VM = struct {
     /// Reset the stack
     pub fn resetStack(self: *VM) void {
         self.stack.clearRetainingCapacity();
+        self.sp = 0;
+        self.frame_cnt = 0;
     }
 
     /// Push a value onto the stack
@@ -82,9 +134,12 @@ pub const VM = struct {
     pub fn pop(self: *VM) !Value {
         if (self.stack.items.len == 0) {
             return error.StackUnderflow;
+        } else if (self.sp == 0) {
+            return self.stack.pop();
+        } else {
+            self.sp -= 1;
+            return self.stack.pop();
         }
-        self.sp -= 1;
-        return self.stack.pop();
     }
 
     pub fn getSP(self: *VM) usize {
@@ -133,51 +188,50 @@ pub const VM = struct {
     }
 
     pub fn interpret(self: *VM) InterpretResult {
-        self.ip = self.chunk.code.bytes.items.ptr;
         return self.run();
     }
 
     fn binary_op(self: *VM, comptime op: fn (Value, Value, std.mem.Allocator) anyerror!?Value) InterpretResult {
         const right = self.pop() catch |err| {
-            std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+            utils.debugPrint(@src(), "Error popping value: {s}\n", .{@errorName(err)});
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
         };
         const left = self.pop() catch |err| {
-            std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+            utils.debugPrint(@src(), "Error popping value: {s}\n", .{@errorName(err)});
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
         };
 
         const result = op(left, right, self.allocator) catch |err| {
-            std.debug.print("Error in binary operation: {s}\n", .{@errorName(err)});
+            utils.debugPrint(@src(), "Error in binary operation: {s}\n", .{@errorName(err)});
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
         };
 
         if (result) |value| {
             self.push(value) catch |err| {
-                std.debug.print("Error pushing result: {s}\n", .{@errorName(err)});
+                utils.debugPrint(@src(), "Error pushing result: {s}\n", .{@errorName(err)});
                 return InterpretResult.INTERPRET_RUNTIME_ERROR;
             };
             return InterpretResult.INTERPRET_OK;
         } else {
-            std.debug.print("Invalid operand types for binary operation\n", .{});
+            utils.debugPrint(@src(), "Invalid operand types for binary operation\n", .{});
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
         }
     }
 
     fn unary_op(self: *VM, comptime op: fn (Value) ?Value) InterpretResult {
         const value = self.pop() catch |err| {
-            std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+            utils.debugPrint(@src(), "Error popping value: {s}\n", .{@errorName(err)});
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
         };
 
         if (op(value)) |result| {
             self.push(result) catch |err| {
-                std.debug.print("Error pushing result: {s}\n", .{@errorName(err)});
+                utils.debugPrint(@src(), "Error pushing result: {s}\n", .{@errorName(err)});
                 return InterpretResult.INTERPRET_RUNTIME_ERROR;
             };
             return InterpretResult.INTERPRET_OK;
         } else {
-            std.debug.print("Invalid operand type for unary operation\n", .{});
+            utils.debugPrint(@src(), "Invalid operand type for unary operation\n", .{});
             return InterpretResult.INTERPRET_RUNTIME_ERROR;
         }
     }
@@ -194,37 +248,40 @@ pub const VM = struct {
             if (self.trace) {
                 // Print the stack before each instruction
                 self.printStack();
-                const offset = @intFromPtr(self.ip) - @intFromPtr(self.chunk.code.bytes.items.ptr);
-                std.debug.print("{d:0>4}   ", .{ offset});
-                _ = self.chunk.disassembleInstruction(offset);
+                const current_frame = &self.call_frames.items[self.frame_cnt - 1];
+                const offset = @intFromPtr(current_frame.ip) - @intFromPtr(current_frame.function.chunk.code.bytes.items.ptr);
+                std.debug.print("{d:0>4}   ", .{offset});
+                _ = current_frame.function.chunk.disassembleInstruction(offset);
             }
 
-            const opcode = self.ip[0];
-            self.ip += 1;
+            var frame = &self.call_frames.items[self.frame_cnt - 1];
+            const instruction = frame.ip[0];
+            frame.ip += 1;
 
-            switch (opcode) {
+            switch (instruction) {
                 OpCode.NIL => {
                     self.push(Value.nil()) catch |err| {
-                        std.debug.print("Error pushing nil: {s}\n", .{@errorName(err)});
+                        utils.debugPrint(@src(), "Error pushing nil: {s}\n", .{@errorName(err)});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
                 },
                 OpCode.CONSTANT => {
-                    self.push(self.chunk.constants.at(self.ip[0]).?) catch |err| {
-                        std.debug.print("Error pushing constant: {s}\n", .{@errorName(err)});
+                    const constant = frame.function.chunk.constants.at(frame.ip[0]).?;
+                    frame.ip += 1;
+                    self.push(constant) catch |err| {
+                        utils.debugPrint(@src(), "Error pushing constant: {s}\n", .{@errorName(err)});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
-                    self.ip += 1;
                 },
                 OpCode.TRUE => {
                     self.push(Value.boolean(true)) catch |err| {
-                        std.debug.print("Error pushing true: {s}\n", .{@errorName(err)});
+                        utils.debugPrint(@src(), "Error pushing true: {s}\n", .{@errorName(err)});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
                 },
                 OpCode.FALSE => {
                     self.push(Value.boolean(false)) catch |err| {
-                        std.debug.print("Error pushing false: {s}\n", .{@errorName(err)});
+                        utils.debugPrint(@src(), "Error pushing false: {s}\n", .{@errorName(err)});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
                 },
@@ -261,13 +318,50 @@ pub const VM = struct {
                     if (result != InterpretResult.INTERPRET_OK) return result;
                 },
                 OpCode.RETURN => {
-                    // Don't pop the final value, just return success
-                    // This allows tests to examine the final result
-                    return InterpretResult.INTERPRET_OK;
+                    // When a function returns a value, that value will be on top
+                    // of the stack. We're about to discard the called function's
+                    // entire stack window, so we pop that return value off and
+                    // hang on to it. Then we discard the CallFrame for the
+                    // returning function. If that was the very last CallFrame,
+                    // it means we've finished executing the top-level code.
+                    // The entire program is done, so we pop the main script
+                    // function from the stack and then exit the interpreter.
+                    //
+                    // Otherwise, we discard all of the slots the callee was using
+                    // for its parameters and local variables. That includes the
+                    // same slots the caller used to pass the arguments. Now that
+                    // the call is done, the caller doesn't need them anymore.
+                    // This means the top of the stack ends up right at the beginning
+                    // of the returning function's stack window.
+                    const result = self.pop() catch |err| {
+                        utils.debugPrint(@src(), "Error popping value: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
+
+                    if (self.frame_cnt == 1) { // Top-level chunk (1-based)
+                        return InterpretResult.INTERPRET_OK;
+                    }
+
+                    // Remove the call frame from the stack and prepare to pop the stack slots
+                    const slots_to_pop = frame.slots;
+                    _ = self.call_frames.pop();
+                    self.frame_cnt -= 1;
+
+                    // Shrink the stack back to the caller's frame
+                    while (self.stack.items.len > slots_to_pop) {
+                        _ = self.pop() catch |err| {
+                            utils.debugPrint(@src(), "Error popping values after RETURN: {s}\n", .{@errorName(err)});
+                            return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                        };
+                    }
+                    self.push(result) catch |err| {
+                        utils.debugPrint(@src(), "Error pushing result: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
                 },
                 OpCode.PRINT => {
                     const value = self.pop() catch |err| {
-                        std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+                        utils.debugPrint(@src(), "Error popping value: {s}\n", .{@errorName(err)});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
                     value.print();
@@ -275,88 +369,88 @@ pub const VM = struct {
                 },
                 OpCode.POP => {
                     _ = self.pop() catch |err| {
-                        std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+                        utils.debugPrint(@src(), "Error popping value: {s}\n", .{@errorName(err)});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
                 },
                 OpCode.DEFINE_GLOBAL => {
                     const name = self.pop() catch |err| {
-                        std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+                        utils.debugPrint(@src(), "Error popping value: {s}\n", .{@errorName(err)});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
                     if (name == .string) {
                         if (name.string) |str_ptr| {
                             const value = self.pop() catch |err| {
-                                std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+                                utils.debugPrint(@src(), "Error popping value: {s}\n", .{@errorName(err)});
                                 return InterpretResult.INTERPRET_RUNTIME_ERROR;
                             };
                             self.globals.put(str_ptr.chars, value) catch |err| {
-                                std.debug.print("Error putting value in global map: {s}\n", .{@errorName(err)});
+                                utils.debugPrint(@src(), "Error putting value in global map: {s}\n", .{@errorName(err)});
                                 return InterpretResult.INTERPRET_RUNTIME_ERROR;
                             };
                         }
                     } else {
-                        std.debug.print("Invalid operand type for DEFINE_GLOBAL\n", .{});
+                        utils.debugPrint(@src(), "Invalid operand type for DEFINE_GLOBAL\n", .{});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     }
                 },
                 OpCode.SET_GLOBAL => {
                     const name = self.pop() catch |err| {
-                        std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+                        utils.debugPrint(@src(), "Error popping value: {s}\n", .{@errorName(err)});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
                     if (name == .string) {
                         if (name.string) |str_ptr| {
                             const value = self.pop() catch |err| {
-                                std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+                                utils.debugPrint(@src(), "Error popping value: {s}\n", .{@errorName(err)});
                                 return InterpretResult.INTERPRET_RUNTIME_ERROR;
                             };
                             self.globals.put(str_ptr.chars, value) catch |err| {
-                                std.debug.print("Error putting value in global map: {s}\n", .{@errorName(err)});
+                                utils.debugPrint(@src(), "Error putting value in global map: {s}\n", .{@errorName(err)});
                                 return InterpretResult.INTERPRET_RUNTIME_ERROR;
                             };
                         }
                     } else {
-                        std.debug.print("Invalid operand type for SET_GLOBAL\n", .{});
+                        utils.debugPrint(@src(), "Invalid operand type for SET_GLOBAL\n", .{});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     }
                 },
                 OpCode.GET_GLOBAL => {
                     const name = self.pop() catch |err| {
-                        std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+                        utils.debugPrint(@src(), "Error popping value: {s}\n", .{@errorName(err)});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
                     if (name == .string) {
                         if (name.string) |str_ptr| {
                             if (self.globals.get(str_ptr.chars)) |value| {
                                 self.push(value) catch |err| {
-                                    std.debug.print("Error pushing value: {s}\n", .{@errorName(err)});
+                                    utils.debugPrint(@src(), "Error pushing value: {s}\n", .{@errorName(err)});
                                     return InterpretResult.INTERPRET_RUNTIME_ERROR;
                                 };
                             } else {
-                                std.debug.print("Undefined global variable: {s}\n", .{str_ptr.chars});
+                                utils.debugPrint(@src(), "Undefined global variable: {s}\n", .{str_ptr.chars});
                                 return InterpretResult.INTERPRET_RUNTIME_ERROR;
                             }
                         }
                     } else {
-                        std.debug.print("Invalid operand type for GET_GLOBAL\n", .{});
+                        utils.debugPrint(@src(), "Invalid operand type for GET_GLOBAL\n", .{});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     }
                 },
                 OpCode.SET_LOCAL => {
                     // Get the slot number from the instruction stream
-                    const slot = self.ip[0];
-                    self.ip += 1;
+                    const slot = frame.slots + frame.ip[0];
+                    frame.ip += 1;
 
                     // Pop the value to store
                     const value = self.peek(0) catch |err| {
-                        std.debug.print("Error popping local value: {s}\n", .{@errorName(err)});
+                        utils.debugPrint(@src(), "Error popping local value: {s}\n", .{@errorName(err)});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
 
                     // Validate slot is within bounds
                     if (slot >= self.stack.items.len) {
-                        std.debug.print("Invalid slot index for SET_LOCAL\n", .{});
+                        utils.debugPrint(@src(), "Invalid slot index for SET_LOCAL\n", .{});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     }
 
@@ -365,82 +459,82 @@ pub const VM = struct {
                 },
                 OpCode.GET_LOCAL => {
                     // Get the slot number from the instruction stream
-                    const slot = self.ip[0];
-                    self.ip += 1;
+                    const slot = frame.slots + frame.ip[0];
+                    frame.ip += 1;
 
                     // Validate slot is within bounds
                     if (slot >= self.stack.items.len) {
-                        std.debug.print("Invalid slot index for GET_LOCAL\n", .{});
+                        utils.debugPrint(@src(), "Invalid slot index for GET_LOCAL\n", .{});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     }
 
                     // Push the value at the slot onto the stack
                     self.push(self.stack.items[slot]) catch |err| {
-                        std.debug.print("Error pushing local value: {s}\n", .{@errorName(err)});
+                        utils.debugPrint(@src(), "Error pushing local value: {s}\n", .{@errorName(err)});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
                 },
                 OpCode.JUMP_IF_FALSE => {
                     // Read the two bytes that form the jump offset
-                    const msb = self.ip[0];
-                    const lsb = self.ip[1];
-                    self.ip += 2; // Advance past the two bytes
+                    const msb = frame.ip[0];
+                    const lsb = frame.ip[1];
+                    frame.ip += 2;
 
                     // Pop the condition value
                     const condition = self.peek(0) catch |err| {
-                        std.debug.print("Error popping condition value: {s}\n", .{@errorName(err)});
+                        utils.debugPrint(@src(), "Error popping condition value: {s}\n", .{@errorName(err)});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
 
                     // Check if we should jump
                     const is_falsey = condition.isFalsey() catch |err| {
-                        std.debug.print("Invalid condition type for JUMP_IF_FALSE: {s}\n", .{@errorName(err)});
+                        utils.debugPrint(@src(), "Invalid condition type for JUMP_IF_FALSE: {s}\n", .{@errorName(err)});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
 
                     // Maybe jump to the offset
                     if (is_falsey == 1) {
                         const jump_offset = (@as(u16, msb) << 8) | @as(u16, lsb);
-                        self.ip += jump_offset;
+                        frame.ip += jump_offset;
                     }
                 },
                 OpCode.JUMP => {
                     // Read the two bytes that form the jump offset
-                    const msb = self.ip[0];
-                    const lsb = self.ip[1];
-                    self.ip += 2; // Advance past the two bytes
+                    const msb = frame.ip[0];
+                    const lsb = frame.ip[1];
+                    frame.ip += 2;
 
                     // Jump to the offset
                     const jump_offset = (@as(u16, msb) << 8) | @as(u16, lsb);
-                    self.ip += jump_offset;
+                    frame.ip += jump_offset;
                 },
                 OpCode.LOOP => {
                     // Read the two bytes that form the jump offset
-                    const msb = self.ip[0];
-                    const lsb = self.ip[1];
-                    self.ip += 2; // Advance past the two bytes
+                    const msb = frame.ip[0];
+                    const lsb = frame.ip[1];
+                    frame.ip += 2;
 
                     // Jump backward by subtracting the offset
                     const jump_offset = (@as(u16, msb) << 8) | @as(u16, lsb);
-                    self.ip -= jump_offset;
+                    frame.ip -= jump_offset;
                 },
                 OpCode.EQUAL => {
                     const right = self.pop() catch |err| {
-                        std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+                        utils.debugPrint(@src(), "Error popping value: {s}\n", .{@errorName(err)});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
                     const left = self.pop() catch |err| {
-                        std.debug.print("Error popping value: {s}\n", .{@errorName(err)});
+                        utils.debugPrint(@src(), "Error popping value: {s}\n", .{@errorName(err)});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
                     if (Value.equals(left, right)) {
                         self.push(Value.boolean(true)) catch |err| {
-                            std.debug.print("Error pushing true: {s}\n", .{@errorName(err)});
+                            utils.debugPrint(@src(), "Error pushing true: {s}\n", .{@errorName(err)});
                             return InterpretResult.INTERPRET_RUNTIME_ERROR;
                         };
                     } else {
                         self.push(Value.boolean(false)) catch |err| {
-                            std.debug.print("Error pushing false: {s}\n", .{@errorName(err)});
+                            utils.debugPrint(@src(), "Error pushing false: {s}\n", .{@errorName(err)});
                             return InterpretResult.INTERPRET_RUNTIME_ERROR;
                         };
                     }
@@ -453,8 +547,33 @@ pub const VM = struct {
                     const result = self.binary_op(Value.gt);
                     if (result != InterpretResult.INTERPRET_OK) return result;
                 },
+                OpCode.CALL => {
+                    const argCount = frame.ip[0];
+                    frame.ip += 1;
+                    const callee = self.peek(argCount) catch |err| {
+                        utils.debugPrint(@src(), "Error peeking callee value: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
+                    if (callee == .function) {
+                        if (callee.function) |function| {
+                            const new_frame = CallFrame.init(function, self.stack.items.len - argCount - 1);
+                            self.call_frames.append(new_frame) catch |err| {
+                                utils.debugPrint(@src(), "Error appending call frame: {s}\n", .{@errorName(err)});
+                                return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                            };
+                            self.frame_cnt += 1;
+                            self.sp = new_frame.slots + function.arity;
+                        } else {
+                            utils.debugPrint(@src(), "Function is null\n", .{});
+                            return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                        }
+                    } else {
+                        utils.debugPrint(@src(), "Invalid operand type for CALL\n", .{});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    }
+                },
                 else => {
-                    std.debug.print("Unknown opcode {d}\n", .{opcode});
+                    utils.debugPrint(@src(), "Unknown opcode {d}\n", .{instruction});
                     return InterpretResult.INTERPRET_RUNTIME_ERROR;
                 },
             }
