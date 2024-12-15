@@ -20,11 +20,12 @@ pub const OpCode = struct {
     pub const GET_GLOBAL: u8 = 0x11;       // Get a global variable (1 byte operand)
     pub const SET_LOCAL: u8 = 0x12;        // Set a local variable (1 byte operand)
     pub const GET_LOCAL: u8 = 0x13;        // Get a local variable (1 byte operand)
-    pub const JUMP_IF_FALSE: u8 = 0x14;    // Jump if false (2 byte operand)
-    pub const JUMP: u8 = 0x15;             // Jump unconditionally (2 byte operand)
+    pub const JUMP_IF_FALSE: u8 = 0x14;    // Jump if false (2 byte operand) forward
+    pub const JUMP: u8 = 0x15;             // Jump unconditionally (2 byte operand) forward
     pub const EQUAL: u8 = 0x16;            // Equality test
     pub const LESS: u8 = 0x17;             // Less than test
     pub const GREATER: u8 = 0x18;          // Greater than test
+    pub const LOOP: u8 = 0x19;             // Loop works like JUMP but jump backward
 
     // Convert opcode value to name
     pub fn getName(code: u8) []const u8 {
@@ -54,6 +55,7 @@ pub const OpCode = struct {
             EQUAL => "EQUAL",
             LESS => "LESS",
             GREATER => "GREATER",
+            LOOP => "LOOP",
             else => "UNKNOWN",
         };
     }
@@ -86,5 +88,6 @@ test "opcode names" {
     try std.testing.expectEqualStrings("EQUAL", OpCode.getName(OpCode.EQUAL));
     try std.testing.expectEqualStrings("LESS", OpCode.getName(OpCode.LESS));
     try std.testing.expectEqualStrings("GREATER", OpCode.getName(OpCode.GREATER));
+    try std.testing.expectEqualStrings("LOOP", OpCode.getName(OpCode.LOOP));
     try std.testing.expectEqualStrings("UNKNOWN", OpCode.getName(0xFF));
 }

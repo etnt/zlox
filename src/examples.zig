@@ -272,3 +272,141 @@ pub fn if_lt(allocator: std.mem.Allocator) !Chunk {
 
     return chunk;
 }
+
+pub fn while_loop(allocator: std.mem.Allocator) !Chunk {
+    var chunk = Chunk.init(allocator);
+
+    // This example implements a simple loop:
+    // a = 3
+    // while (a > 0) {
+    //     a = a - 1
+    //     print a
+    // }
+    // print "Done!"
+
+    // Add constants
+    const three = try chunk.addConstant(Value.number(3.0));
+    const one = try chunk.addConstant(Value.number(1.0));
+    const zero = try chunk.addConstant(Value.number(0.0));
+    const done = try chunk.addConstant(try Value.createString(allocator, "Done!"));
+
+    // Initialize a = 3 in slot 0
+    try chunk.writeOpcode(OpCode.NIL, 1);            // Initialize slot 0
+    try chunk.writeOpcode(OpCode.CONSTANT, 1);       // Push 3.0
+    try chunk.writeByte(@intCast(three), 1);
+    try chunk.writeOpcode(OpCode.SET_LOCAL, 1);      // Set local variable in slot 0
+    try chunk.writeByte(@intCast(0), 1);
+    try chunk.writeOpcode(OpCode.POP, 1);            // Clean up stack
+
+    // Start of loop (we'll jump back here)
+    // Compare a > 0
+    const loop_start = chunk.code.len();             // Remember where loop starts
+    try chunk.writeOpcode(OpCode.GET_LOCAL, 2);      // Push a
+    try chunk.writeByte(@intCast(0), 2);
+    try chunk.writeOpcode(OpCode.CONSTANT, 2);       // Push 0
+    try chunk.writeByte(@intCast(zero), 2);
+    try chunk.writeOpcode(OpCode.GREATER, 2);        // Compare a > 0
+
+    // If false, jump to end of loop
+    try chunk.writeOpcode(OpCode.JUMP_IF_FALSE, 2);
+    try chunk.writeByte(0, 2);                      // MSB of jump offset
+    try chunk.writeByte(15, 2);                     // LSB of jump offset (skip the loop body)
+    try chunk.writeOpcode(OpCode.POP, 3);             // Clean up stack
+
+    // Loop body: a = a - 1, print a
+    try chunk.writeOpcode(OpCode.GET_LOCAL, 3);      // Push a
+    try chunk.writeByte(@intCast(0), 3);
+    try chunk.writeOpcode(OpCode.CONSTANT, 3);       // Push 1
+    try chunk.writeByte(@intCast(one), 3);
+    try chunk.writeOpcode(OpCode.SUB, 3);            // Subtract
+    try chunk.writeOpcode(OpCode.SET_LOCAL, 3);      // Store back in a
+    try chunk.writeByte(@intCast(0), 3);
+    try chunk.writeOpcode(OpCode.GET_LOCAL, 3);      // Push a for printing
+    try chunk.writeByte(@intCast(0), 3);
+    try chunk.writeOpcode(OpCode.PRINT, 3);          // Print a
+    try chunk.writeOpcode(OpCode.POP, 3);            // Clean up stack
+
+    // Jump back to start of loop
+    const offset = chunk.code.len() - loop_start + 3;  // +3 for the LOOP instruction and its operands
+    try chunk.writeOpcode(OpCode.LOOP, 3);
+    try chunk.writeByte(@intCast(offset >> 8), 3);   // MSB of offset
+    try chunk.writeByte(@intCast(offset & 0xff), 3); // LSB of offset
+
+    // End of loop: print "Done!"
+    try chunk.writeOpcode(OpCode.POP, 4);            // Clean up comparison result
+    try chunk.writeOpcode(OpCode.CONSTANT, 4);       // Push "Done!"
+    try chunk.writeByte(@intCast(done), 4);
+    try chunk.writeOpcode(OpCode.PRINT, 4);          // Print "Done!"
+
+    try chunk.writeOpcode(OpCode.RETURN, 5);
+
+    return chunk;
+}
+
+pub fn for_loop(allocator: std.mem.Allocator) !Chunk {
+    var chunk = Chunk.init(allocator);
+
+    // This example implements a simple for loop:
+    // for (i = 0; i < 3; i = i + 1) {
+    //     print i
+    // }
+    // print "Done!"
+
+    // Add constants
+    const zero = try chunk.addConstant(Value.number(0.0));
+    const one = try chunk.addConstant(Value.number(1.0));
+    const three = try chunk.addConstant(Value.number(3.0));
+    const done = try chunk.addConstant(try Value.createString(allocator, "Done!"));
+
+    // Initialize i = 0 in slot 0
+    try chunk.writeOpcode(OpCode.NIL, 1);            // Initialize slot 0
+    try chunk.writeOpcode(OpCode.CONSTANT, 1);       // Push 0.0
+    try chunk.writeByte(@intCast(zero), 1);
+    try chunk.writeOpcode(OpCode.SET_LOCAL, 1);      // Set local variable in slot 0
+    try chunk.writeByte(@intCast(0), 1);
+    try chunk.writeOpcode(OpCode.POP, 1);            // Clean up stack
+
+    // Start of loop (we'll jump back here)
+    // Compare i < 10
+    const loop_start = chunk.code.len();             // Remember where loop starts
+    try chunk.writeOpcode(OpCode.GET_LOCAL, 2);      // Push i
+    try chunk.writeByte(@intCast(0), 2);
+    try chunk.writeOpcode(OpCode.CONSTANT, 2);       // Push 3
+    try chunk.writeByte(@intCast(three), 2);
+    try chunk.writeOpcode(OpCode.LESS, 2);           // Compare i < 3
+
+    // If false, jump to end of loop
+    try chunk.writeOpcode(OpCode.JUMP_IF_FALSE, 2);
+    try chunk.writeByte(0, 2);                      // MSB of jump offset
+    try chunk.writeByte(15, 2);                     // LSB of jump offset (skip the loop body)
+    try chunk.writeOpcode(OpCode.POP, 3);             // Clean up stack
+
+    // Loop body: print i, i = i + 1
+    try chunk.writeOpcode(OpCode.GET_LOCAL, 3);      // Push i for printing
+    try chunk.writeByte(@intCast(0), 3);
+    try chunk.writeOpcode(OpCode.PRINT, 3);          // Print i
+    try chunk.writeOpcode(OpCode.GET_LOCAL, 3);      // Push i
+    try chunk.writeByte(@intCast(0), 3);
+    try chunk.writeOpcode(OpCode.CONSTANT, 3);       // Push 1
+    try chunk.writeByte(@intCast(one), 3);
+    try chunk.writeOpcode(OpCode.ADD, 3);            // Add
+    try chunk.writeOpcode(OpCode.SET_LOCAL, 3);      // Store back in i
+    try chunk.writeByte(@intCast(0), 3);
+    try chunk.writeOpcode(OpCode.POP, 3);            // Clean up stack
+
+    // Jump back to start of loop
+    const offset = chunk.code.len() - loop_start + 3;  // +3 for the LOOP instruction and its operands
+    try chunk.writeOpcode(OpCode.LOOP, 3);
+    try chunk.writeByte(@intCast(offset >> 8), 3);   // MSB of offset
+    try chunk.writeByte(@intCast(offset & 0xff), 3); // LSB of offset
+
+    // End of loop: print "Done!"
+    try chunk.writeOpcode(OpCode.POP, 4);            // Clean up comparison result
+    try chunk.writeOpcode(OpCode.CONSTANT, 4);       // Push "Done!"
+    try chunk.writeByte(@intCast(done), 4);
+    try chunk.writeOpcode(OpCode.PRINT, 4);          // Print "Done!"
+
+    try chunk.writeOpcode(OpCode.RETURN, 5);
+
+    return chunk;
+}

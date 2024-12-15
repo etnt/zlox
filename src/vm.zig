@@ -271,6 +271,7 @@ pub const VM = struct {
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
                     value.print();
+                    std.debug.print("\n", .{});
                 },
                 OpCode.POP => {
                     _ = self.pop() catch |err| {
@@ -412,6 +413,16 @@ pub const VM = struct {
                     // Jump to the offset
                     const jump_offset = (@as(u16, msb) << 8) | @as(u16, lsb);
                     self.ip += jump_offset;
+                },
+                OpCode.LOOP => {
+                    // Read the two bytes that form the jump offset
+                    const msb = self.ip[0];
+                    const lsb = self.ip[1];
+                    self.ip += 2; // Advance past the two bytes
+
+                    // Jump backward by subtracting the offset
+                    const jump_offset = (@as(u16, msb) << 8) | @as(u16, lsb);
+                    self.ip -= jump_offset;
                 },
                 OpCode.EQUAL => {
                     const right = self.pop() catch |err| {

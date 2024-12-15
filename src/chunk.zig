@@ -188,6 +188,16 @@ pub const Chunk = struct {
                     std.debug.print("JUMP              {d} \n", .{jump_offset});
                     return offset + 3; // Increment by 3 because we read opcode + 2 bytes
                 },
+                OpCode.LOOP => {
+                    // Note: Two byte operands forms the offset
+                    const msb = self.code.at(offset + 1).?;
+                    const lsb = self.code.at(offset + 2).?;
+                    const offset_val = (@as(u16, msb) << 8) | @as(u16, lsb);
+                    // Cast to signed for display purposes
+                    const jump_offset = -@as(i16, @intCast(offset_val));
+                    std.debug.print("LOOP              {d} \n", .{jump_offset});
+                    return offset + 3; // Increment by 3 because we read opcode + 2 bytes
+                },
                 OpCode.EQUAL => {
                     std.debug.print("EQUAL             \n", .{});
                     return offset + 1; // Increment by 1 because we read opcode

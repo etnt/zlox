@@ -51,6 +51,7 @@ pub fn main() !void {
         std.debug.print("  5: If-Then-Else operations\n", .{});
         std.debug.print("  6: If-Greater-Than\n", .{});
         std.debug.print("  7: If-Less-Than\n", .{});
+        std.debug.print("  8: while loop\n", .{});
         return;
     }
 
@@ -88,6 +89,14 @@ pub fn main() !void {
             ex_name = "if (3.0 < 7.0) then print(\"Yes\") else print(\"No\")";
             break :blk try ex.if_lt(allocator);
         },
+        8 => blk: {
+            ex_name = "\na = 3\nwhile (a > 0) {\n  a = a - 1\n  print a\n}\nprint \"Done!\"";
+            break :blk try ex.while_loop(allocator);
+        },
+        9=> blk: {
+            ex_name = "\nfor (i = 0; i < 3; i = i + 1) {\n  print i\n}\nprint \"Done!\"";
+            break :blk try ex.for_loop(allocator);
+        },
         else => {
             std.debug.print("Invalid example number. Use --help to see available examples.\n", .{});
             return;
@@ -122,7 +131,3 @@ pub fn main() !void {
     vm.printGlobals();
     std.debug.print("\n", .{});
 }
-
-
-
-

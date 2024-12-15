@@ -86,10 +86,12 @@ src/
 
 ### Instruction Set
 - Arithmetic: ADD, SUBTRACT, MULTIPLY, DIVIDE, NEGATE
-- Logic: AND, OR, NOT
-- Variables: DEFINE_GLOBAL, SET_GLOBAL, GET_GLOBAL, SET_LOCAL
+- Logic: AND, OR, NOT, EQUAL, LESS, GREATER
+- Control Flow: JUMP, JUMP_IF_FALSE, LOOP
+- Variables: DEFINE_GLOBAL, SET_GLOBAL, GET_GLOBAL, SET_LOCAL, GET_LOCAL
 - Stack: PUSH, POP, RETURN
 - Constants: CONSTANT, TRUE, FALSE, NIL
+- I/O: PRINT
 
 ### Memory Management
 - Proper cleanup chains for all allocated resources
