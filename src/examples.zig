@@ -3,6 +3,10 @@ const root = @import("root.zig");
 const Chunk = root.Chunk;
 const OpCode = root.OpCode;
 const Value = root.Value;
+const VM = root.VM;
+const vm_mod = @import("vm.zig");
+
+const InterpretResult = vm_mod.InterpretResult;
 
 pub fn local_variables(allocator: std.mem.Allocator) !Chunk {
     // Create a new chunk
@@ -436,3 +440,111 @@ pub fn for_loop(allocator: std.mem.Allocator) !Chunk {
     return chunk;
 }
 
+
+test "local variable assignment" {
+    var chunk = try local_variables(std.testing.allocator);
+    defer chunk.deinit();
+
+    // Create and initialize a VM with tracing disabled
+    var vm = try VM.init(&chunk, false, std.testing.allocator);
+    defer vm.deinit();
+
+    // Do VM interpretation and check global variable
+    try std.testing.expectEqual(InterpretResult.INTERPRET_OK, vm.interpret());  
+}
+
+test "assignment" {
+    var chunk = try assignment(std.testing.allocator);
+    defer chunk.deinit();
+
+    // Create and initialize a VM with tracing disabled
+    var vm = try VM.init(&chunk, false, std.testing.allocator);
+    defer vm.deinit();
+
+    // Do VM interpretation and check global variable
+    try std.testing.expectEqual(InterpretResult.INTERPRET_OK, vm.interpret());  
+}
+
+test "concatenate" {
+    var chunk = try concatenate(std.testing.allocator);
+    defer chunk.deinit();
+
+    // Create and initialize a VM with tracing disabled
+    var vm = try VM.init(&chunk, false, std.testing.allocator);
+    defer vm.deinit();
+
+    // Do VM interpretation and check global variable
+    try std.testing.expectEqual(InterpretResult.INTERPRET_OK, vm.interpret());  
+}
+
+test "arithmetics" {
+    var chunk = try arithmetics(std.testing.allocator);
+    defer chunk.deinit();
+
+    // Create and initialize a VM with tracing disabled
+    var vm = try VM.init(&chunk, false, std.testing.allocator);
+    defer vm.deinit();
+
+    // Do VM interpretation and check global variable
+    try std.testing.expectEqual(InterpretResult.INTERPRET_OK, vm.interpret());  
+}
+
+test "if then else" {
+    var chunk = try if_then_else(std.testing.allocator);
+    defer chunk.deinit();
+
+    // Create and initialize a VM with tracing disabled
+    var vm = try VM.init(&chunk, false, std.testing.allocator);
+    defer vm.deinit();
+
+    // Do VM interpretation and check global variable
+    try std.testing.expectEqual(InterpretResult.INTERPRET_OK, vm.interpret());  
+}
+
+test "if greater than" {
+    var chunk = try if_gt(std.testing.allocator);
+    defer chunk.deinit();
+
+    // Create and initialize a VM with tracing disabled
+    var vm = try VM.init(&chunk, false, std.testing.allocator);
+    defer vm.deinit();
+
+    // Do VM interpretation and check global variable
+    try std.testing.expectEqual(InterpretResult.INTERPRET_OK, vm.interpret());  
+}
+
+test "if less than" {
+    var chunk = try if_lt(std.testing.allocator);
+    defer chunk.deinit();
+
+    // Create and initialize a VM with tracing disabled
+    var vm = try VM.init(&chunk, false, std.testing.allocator);
+    defer vm.deinit();
+
+    // Do VM interpretation and check global variable
+    try std.testing.expectEqual(InterpretResult.INTERPRET_OK, vm.interpret());  
+}
+
+test "while loop" {
+    var chunk = try while_loop(std.testing.allocator);
+    defer chunk.deinit();
+
+    // Create and initialize a VM with tracing disabled
+    var vm = try VM.init(&chunk, false, std.testing.allocator);
+    defer vm.deinit();
+
+    // Do VM interpretation and check global variable
+    try std.testing.expectEqual(InterpretResult.INTERPRET_OK, vm.interpret());  
+}
+
+test "for loop" {
+    var chunk = try for_loop(std.testing.allocator);
+    defer chunk.deinit();
+
+    // Create and initialize a VM with tracing disabled
+    var vm = try VM.init(&chunk, false, std.testing.allocator);
+    defer vm.deinit();
+
+    // Do VM interpretation and check global variable
+    try std.testing.expectEqual(InterpretResult.INTERPRET_OK, vm.interpret());  
+} 

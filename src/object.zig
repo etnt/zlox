@@ -1,11 +1,13 @@
 const std = @import("std");
 const Chunk = @import("chunk.zig").Chunk;
 const utils = @import("utils.zig");
+const Value = @import("value.zig").Value;
 
 /// ObjectType represents different kinds of heap-allocated objects
 pub const ObjectType = enum {
     string,
     function,
+    native_function,
     // More object types will be added later (class, instance, etc.)
 };
 
@@ -14,6 +16,29 @@ pub const Object = struct {
     type: ObjectType,
     // Add garbage collection fields later
 
+    pub const NativeFunction = struct {
+        obj: Object,
+        function: *const fn([]Value) Value,
+        name: []const u8,
+        arity: usize,
+
+        pub fn init(allocator: std.mem.Allocator, name: []const u8, function: *const fn([]Value) Value, arity: usize) !*NativeFunction {
+            const native = try allocator.create(NativeFunction);
+            native.* = .{
+                .obj = .{ .type = .native_function },
+                .function = function,
+                .name = try allocator.dupe(u8, name),
+                .arity = arity,
+            };
+            return native;
+        }
+
+        pub fn deinit(self: *NativeFunction, allocator: std.mem.Allocator) void {
+            allocator.free(self.name);
+            allocator.destroy(self);
+        }
+    };
+
     pub const Function = struct {
         obj: Object,
         arity: usize,
@@ -21,7 +46,6 @@ pub const Object = struct {
         name: []const u8,
 
         pub fn init(allocator: std.mem.Allocator, name: []const u8, arity: usize, chunk: Chunk) !*Function {
-
             // Create a new function object
             const function = try allocator.create(Function);
             function.obj = .{ .type = .function };
@@ -50,7 +74,6 @@ pub const Object = struct {
         pub fn set_chunk(self: *Function, chunk: *Chunk) void {
             self.chunk = chunk;
         }
-
     };
 
     /// String object type
@@ -116,4 +139,3 @@ pub fn deinitInternPool() void {
     }
     //utils.debugPrintln(@src(),"Freeing Intern Pool...OK", .{});
 }
-

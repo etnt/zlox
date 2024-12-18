@@ -44,7 +44,7 @@ pub fn main() !u8 {
         std.debug.print("Usage: zig build run -- [options]\n", .{});
         std.debug.print("Options:\n", .{});
         std.debug.print("  -h, --help             Display this help and exit\n", .{});
-        std.debug.print("  -x, --example <usize>  Choose example to run (1-4)\n", .{});
+        std.debug.print("  -x, --example <usize>  Choose example to run (1-12)\n", .{});
         std.debug.print("  -s, --slow             Run slow (for animated effect)\n", .{});
         std.debug.print("  -t, --trace            Trace the execution\n", .{});
         std.debug.print("\nExamples:\n", .{});
@@ -59,6 +59,7 @@ pub fn main() !u8 {
         std.debug.print("  9: for loop\n", .{});
         std.debug.print(" 10: function call (sum)\n", .{});
         std.debug.print(" 11: function call (factorial)\n", .{});
+        std.debug.print(" 12: native functions (clock & sleep)\n", .{});
         return 0;
     }
 
@@ -103,17 +104,21 @@ pub fn main() !u8 {
             ex_name = "\na = 3\nwhile (a > 0) {\n  a = a - 1\n  print a\n}\nprint \"Done!\"";
             break :blk try ex.while_loop(allocator);
         },
-        9=> blk: {
+        9 => blk: {
             ex_name = "\nfor (i = 0; i < 3; i = i + 1) {\n  print i\n}\nprint \"Done!\"";
             break :blk try ex.for_loop(allocator);
         },
-        10=> blk: {
+        10 => blk: {
             ex_name = "\nfunc sum(a, b, c) {\n  return a + b + c\n}\nprint 4 + sum(5, 6, 7)";
             break :blk try exfun.function_sum(allocator);
         },
-        11=> blk: {
+        11 => blk: {
             ex_name = "\nfunc factorial(n) {\n  if (n == 0) return 1\n  return n * factorial(n - 1)\n}\nprint factorial(5)";
             break :blk try exfun.function_factorial(allocator);
+        },
+        12 => blk: {
+            ex_name = "\nt1 = clock();\nsleep(2);\nt2 = clock();\nprint t2 - t1;";
+            break :blk try exfun.function_native_clock(allocator);
         },
         else => {
             std.debug.print("Invalid example number. Use --help to see available examples.\n", .{});
@@ -165,4 +170,10 @@ pub fn main() !u8 {
             return 1;
         },
     }
+}
+
+test {
+    _ = @import("value_test.zig");
+    _ = @import("object_test.zig");
+    _ = @import("line_array_test.zig");
 }

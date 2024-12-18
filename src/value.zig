@@ -7,9 +7,10 @@ pub const ObjectType = obj.ObjectType;
 pub const Object = obj.Object;
 pub const String = obj.Object.String;
 pub const Function = obj.Object.Function;
+pub const NativeFunction = obj.Object.NativeFunction;
 
 /// ValueType represents the different types of values our VM can handle
-pub const ValueType = enum { nil, number, boolean, object, string, function };
+pub const ValueType = enum { nil, number, boolean, object, string, function, native_function };
 
 /// Value represents a constant value in our bytecode
 pub const Value = union(ValueType) {
@@ -19,6 +20,7 @@ pub const Value = union(ValueType) {
     object: ?*Object,
     string: ?*String,
     function: ?*Function,
+    native_function: ?*NativeFunction,
 
     /// Print a value
     pub fn print(self: Value) void {
@@ -40,6 +42,13 @@ pub const Value = union(ValueType) {
                     std.debug.print("null function", .{});
                 }
             },
+            .native_function => |f| {
+                if (f) |func_ptr| {
+                    std.debug.print("Native Function: {s}", .{func_ptr.name});
+                } else {
+                    std.debug.print("null native function", .{});
+                }
+            },
             .object => |o| {
                 if (o) |obj_ptr| {
                     switch (obj_ptr.type) {
@@ -58,6 +67,14 @@ pub const Value = union(ValueType) {
                                 std.debug.print("{s}", .{function_data.name});
                             } else {
                                 std.debug.print("Alignment error: Cannot cast to Function\n", .{});
+                            }
+                        },
+                        .native_function => {
+                            if (@alignOf(NativeFunction) <= @alignOf(Object)) {
+                                const native_data: *NativeFunction = @alignCast(obj_ptr);
+                                std.debug.print("Native: {s}", .{native_data.name});
+                            } else {
+                                std.debug.print("Alignment error: Cannot cast to NativeFunction\n", .{});
                             }
                         },
                     }
@@ -110,6 +127,11 @@ pub const Value = union(ValueType) {
     pub fn createFunction(allocator: std.mem.Allocator, name: []const u8, arity: usize, chunk: Chunk) !Value {
         const func = try Function.init(allocator, name, arity, chunk);
         return Value{ .function = func };
+    }
+
+    pub fn createNativeFunction(allocator: std.mem.Allocator, name: []const u8, function: *const fn([]Value) Value, arity: usize) !Value {
+        const native = try NativeFunction.init(allocator, name, function, arity);
+        return Value{ .native_function = native };
     }
 
     /// Add two values
@@ -184,13 +206,11 @@ pub const Value = union(ValueType) {
         return null;
     }
 
-
     /// Negate a value
     pub fn negate(self: Value) ?Value {
         return switch (self) {
             .number => |n| Value.number(-n),
-            .nil, 
-            .boolean, .string, .function, .object => null,
+            .nil, .boolean, .string, .function, .native_function, .object => null,
         };
     }
 
@@ -216,7 +236,7 @@ pub const Value = union(ValueType) {
     pub fn not(self: Value) ?Value {
         return switch (self) {
             .boolean => |b| Value.boolean(!b),
-            .nil, .number, .string, .function, .object => null,
+            .nil, .number, .string, .function, .native_function, .object => null,
         };
     }
 
@@ -236,6 +256,7 @@ pub const Value = union(ValueType) {
                 return str_a == str_b;
             },
             .function => |func_a| b.function == func_a,  // FIXME: compare function pointers?
+            .native_function => |func_a| b.native_function == func_a,
             .object => |obj_a| b.object == obj_a,
         };
     }
@@ -251,6 +272,7 @@ pub const Value = union(ValueType) {
                 return Value{ .string = new_str };
             } else Value{ .string = null },
             .function => |f| Value{ .function = f },    // FIXME - clone function
+            .native_function => |f| Value{ .native_function = f },
             .object => |o| Value{ .object = o },
         };
     }
@@ -275,6 +297,11 @@ pub const ValueArray = struct {
         for (self.values.items) |value| {
             switch (value) {
                 .function => |maybe_func| {
+                    if (maybe_func) |func| {
+                        func.deinit(self.allocator);
+                    }
+                },
+                .native_function => |maybe_func| {
                     if (maybe_func) |func| {
                         func.deinit(self.allocator);
                     }

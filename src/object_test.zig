@@ -9,7 +9,7 @@ test "Object - string operations and interning" {
 
     // Create a VM to own the strings
     var chunk = Chunk.init(allocator);
-    var vm = VM.init(&chunk, false, allocator);
+    var vm = try VM.init(&chunk, false, allocator);
     defer {
         vm.deinit();
         chunk.deinit();

@@ -7,7 +7,7 @@ const utils = @import("utils.zig");
 
 pub const Object = obj.Object;
 pub const Function = obj.Object.Function;
-
+pub const NativeFunction = obj.Object.NativeFunction;
 pub const String = obj.Object.String;
 
 pub const InterpretResult = enum(u8) {
@@ -378,21 +378,47 @@ pub const VM = struct {
                         utils.debugPrint(@src(), "Error popping value: {s}\n", .{@errorName(err)});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
-                    if (name == .string) {
-                        if (name.string) |str_ptr| {
-                            const value = self.pop() catch |err| {
-                                utils.debugPrint(@src(), "Error popping value: {s}\n", .{@errorName(err)});
-                                return InterpretResult.INTERPRET_RUNTIME_ERROR;
-                            };
-                            self.globals.put(str_ptr.chars, value) catch |err| {
-                                utils.debugPrint(@src(), "Error putting value in global map: {s}\n", .{@errorName(err)});
-                                return InterpretResult.INTERPRET_RUNTIME_ERROR;
-                            };
-                        }
-                    } else {
-                        utils.debugPrint(@src(), "Invalid operand type for DEFINE_GLOBAL\n", .{});
+                    const value = self.pop() catch |err| {
+                        utils.debugPrint(@src(), "Error popping value: {s}\n", .{@errorName(err)});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
+
+                    // Get the string name from either a string value or a string object
+                    var name_str: []const u8 = undefined;
+                    switch (name) {
+                        .string => |maybe_str| {
+                            if (maybe_str) |str| {
+                                name_str = str.chars;
+                            } else {
+                                utils.debugPrint(@src(), "String is null\n", .{});
+                                return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                            }
+                        },
+                        .object => |maybe_obj| {
+                            if (maybe_obj) |obj_ptr| {
+                                if (obj_ptr.type == .string) {
+                                    const str_ptr: *String = @alignCast(@ptrCast(obj_ptr));
+                                    name_str = str_ptr.chars;
+                                } else {
+                                    utils.debugPrint(@src(), "Object is not a string\n", .{});
+                                    return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                                }
+                            } else {
+                                utils.debugPrint(@src(), "Object is null\n", .{});
+                                return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                            }
+                        },
+                        else => {
+                            utils.debugPrint(@src(), "Invalid operand type for DEFINE_GLOBAL\n", .{});
+                            return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                        },
                     }
+
+                    // Store the value in globals
+                    self.globals.put(name_str, value) catch |err| {
+                        utils.debugPrint(@src(), "Error putting value in global map: {s}\n", .{@errorName(err)});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    };
                 },
                 OpCode.SET_GLOBAL => {
                     const name = self.pop() catch |err| {
@@ -554,22 +580,73 @@ pub const VM = struct {
                         utils.debugPrint(@src(), "Error peeking callee value: {s}\n", .{@errorName(err)});
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     };
-                    if (callee == .function) {
-                        if (callee.function) |function| {
-                            const new_frame = CallFrame.init(function, self.stack.items.len - argCount - 1);
-                            self.call_frames.append(new_frame) catch |err| {
-                                utils.debugPrint(@src(), "Error appending call frame: {s}\n", .{@errorName(err)});
+
+                    // Handle both regular functions and native functions
+                    switch (callee) {
+                        .function => |maybe_function| {
+                            if (maybe_function) |function| {
+                                const new_frame = CallFrame.init(function, self.stack.items.len - argCount - 1);
+                                self.call_frames.append(new_frame) catch |err| {
+                                    utils.debugPrint(@src(), "Error appending call frame: {s}\n", .{@errorName(err)});
+                                    return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                                };
+                                self.frame_cnt += 1;
+                                self.sp = new_frame.slots + function.arity;
+                            } else {
+                                utils.debugPrint(@src(), "Function is null\n", .{});
                                 return InterpretResult.INTERPRET_RUNTIME_ERROR;
-                            };
-                            self.frame_cnt += 1;
-                            self.sp = new_frame.slots + function.arity;
-                        } else {
-                            utils.debugPrint(@src(), "Function is null\n", .{});
+                            }
+                        },
+                        .native_function => |maybe_native| {
+                            if (maybe_native) |native| {
+                                // Check arity
+                                if (argCount != native.arity) {
+                                    utils.debugPrint(@src(), "Expected {d} arguments but got {d}\n", .{ native.arity, argCount });
+                                    return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                                }
+
+                                // Get arguments from stack
+                                var args = std.ArrayList(Value).init(self.allocator);
+                                defer args.deinit();
+
+                                var i: usize = 0;
+                                while (i < argCount) : (i += 1) {
+                                    const arg = self.peek(argCount - i - 1) catch |err| {
+                                        utils.debugPrint(@src(), "Error getting argument: {s}\n", .{@errorName(err)});
+                                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                                    };
+                                    args.append(arg) catch |err| {
+                                        utils.debugPrint(@src(), "Error appending argument: {s}\n", .{@errorName(err)});
+                                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                                    };
+                                }
+
+                                // Pop the function and arguments
+                                var j: usize = 0;
+                                while (j < argCount + 1) : (j += 1) {
+                                    _ = self.pop() catch |err| {
+                                        utils.debugPrint(@src(), "Error popping arguments: {s}\n", .{@errorName(err)});
+                                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                                    };
+                                }
+
+                                // Call the native function
+                                const result = native.function(args.items);
+
+                                // Push the result
+                                self.push(result) catch |err| {
+                                    utils.debugPrint(@src(), "Error pushing native function result: {s}\n", .{@errorName(err)});
+                                    return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                                };
+                            } else {
+                                utils.debugPrint(@src(), "Native function is null\n", .{});
+                                return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                            }
+                        },
+                        else => {
+                            utils.debugPrint(@src(), "Can only call functions and native functions\n", .{});
                             return InterpretResult.INTERPRET_RUNTIME_ERROR;
-                        }
-                    } else {
-                        utils.debugPrint(@src(), "Invalid operand type for CALL\n", .{});
-                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                        },
                     }
                 },
                 else => {

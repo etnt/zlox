@@ -139,7 +139,7 @@ test "Value - string operations" {
 
     // Create a VM to own the strings
     var chunk = Chunk.init(allocator);
-    var vm = VM.init(&chunk, false, allocator);
+    var vm = try VM.init(&chunk, false, allocator);
     defer {
         vm.deinit();
         chunk.deinit();
@@ -175,7 +175,7 @@ test "ValueArray - contains" {
 
     // Create a VM to own the strings
     var chunk = Chunk.init(allocator);
-    var vm = VM.init(&chunk, false, allocator);
+    var vm = try VM.init(&chunk, false, allocator);
     defer {
         vm.deinit();
         chunk.deinit();
@@ -206,7 +206,7 @@ test "Value - isFalsey" {
 
     // Create a VM to own the strings
     var chunk = Chunk.init(allocator);
-    var vm = VM.init(&chunk, false, allocator);
+    var vm = try VM.init(&chunk, false, allocator);
     defer {
         vm.deinit();
         chunk.deinit();
@@ -217,7 +217,7 @@ test "Value - isFalsey" {
     try std.testing.expectEqual(@as(u1, 0), try Value.boolean(true).isFalsey());
     try std.testing.expectError(Value.IsFalseyError.InvalidType, Value.number(0).isFalsey());
     try std.testing.expectError(Value.IsFalseyError.InvalidType, Value.number(1).isFalsey());
-    
+
     const str = try Value.createString(allocator, "test");
     try std.testing.expectError(Value.IsFalseyError.InvalidType, str.isFalsey());
 }
