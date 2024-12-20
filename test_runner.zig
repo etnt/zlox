@@ -29,6 +29,7 @@ pub fn main() !void {
     const printer = Printer.init();
     printer.fmt("\r\x1b[0K", .{}); // beginning of line and clear to end of line
 
+    var current_module: ?[]const u8 = null;
     for (builtin.test_functions) |t| {
         if (isSetup(t)) {
             current_test = friendlyName(t.name);
@@ -42,6 +43,15 @@ pub fn main() !void {
     for (builtin.test_functions) |t| {
         if (isSetup(t) or isTeardown(t)) {
             continue;
+        }
+
+        // Extract module name from test function name (e.g., "c_parser_test.test.parse simple binary operation")
+        if (std.mem.indexOf(u8, t.name, ".test.")) |dot_index| {
+            const module = t.name[0..dot_index];
+            if (current_module == null or !std.mem.eql(u8, current_module.?, module)) {
+                current_module = module;
+                printer.fmt("\n\x1b[1;36mRunning tests from {s}\x1b[0m\n", .{module});
+            }
         }
 
         var status = Status.pass;
