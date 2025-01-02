@@ -96,7 +96,9 @@ pub fn function_sum(allocator: std.mem.Allocator) !Chunk {
 
 pub fn function_factorial(allocator: std.mem.Allocator) !Chunk {
     var chunk = Chunk.init(allocator);
+    errdefer chunk.deinit();
     var facChunk = Chunk.init(allocator);
+    errdefer facChunk.deinit();
 
     // ---------------------------
     // fun fac(n) {
@@ -163,9 +165,14 @@ pub fn function_factorial(allocator: std.mem.Allocator) !Chunk {
     try facChunk.writeOpcode(OpCode.RETURN, 1);
     // --- End of factorial Chunk
 
-    // Create the factorial function
+    // Create the factorial function and wrap it in a closure
     const facFun = try Value.createFunction(allocator, "fac", 1, facChunk);
-    const fac = try chunk.addConstant(facFun);
+
+    // Create an empty upvalue array since fac doesn't use any upvalues
+    var upvalues = std.ArrayList(Value).init(allocator);
+    defer upvalues.deinit();
+    const facClosure = try Value.createClosure(allocator, facFun.function.?, upvalues.items);
+    const fac = try chunk.addConstant(facClosure);
 
     // Create constant for test value
     const five = try chunk.addConstant(Value.number(5.0));
@@ -174,7 +181,7 @@ pub fn function_factorial(allocator: std.mem.Allocator) !Chunk {
     // Allocate slot 0 (= "script" , i.e the top-level) on the stack
     try chunk.writeOpcode(OpCode.NIL, 1);
 
-    // Push the factorial function reference onto the stack
+    // Push the factorial closure reference onto the stack
     try chunk.writeOpcode(OpCode.CONSTANT, 1);
     try chunk.writeByte(@intCast(fac), 1);
 
