@@ -53,29 +53,17 @@ pub const Value = union(ValueType) {
                 if (o) |obj_ptr| {
                     switch (obj_ptr.type) {
                         .string => { 
-                            if (@alignOf(String) <= @alignOf(Object)) {
-                                const string_data: *String = @alignCast(obj_ptr);
-                                std.debug.print("{s}", .{string_data.chars});
-                            } else {
-                                std.debug.print("Alignment error: Cannot cast to String\n", .{});
-                            }
+                            const string_data: *String = obj_ptr.asString();
+                            std.debug.print("{s}", .{string_data.chars});
                         },
                         .function => {
                             // Print function name
-                            if (@alignOf(Function) <= @alignOf(Object)) {
-                                const function_data: *Function = @alignCast(obj_ptr);
-                                std.debug.print("{s}", .{function_data.name});
-                            } else {
-                                std.debug.print("Alignment error: Cannot cast to Function\n", .{});
-                            }
+                            const function_data: *Function = obj_ptr.asFunction();
+                            std.debug.print("{s}", .{function_data.name});
                         },
                         .native_function => {
-                            if (@alignOf(NativeFunction) <= @alignOf(Object)) {
-                                const native_data: *NativeFunction = @alignCast(obj_ptr);
-                                std.debug.print("Native: {s}", .{native_data.name});
-                            } else {
-                                std.debug.print("Alignment error: Cannot cast to NativeFunction\n", .{});
-                            }
+                            const native_data: *NativeFunction = obj_ptr.asNativeFunction();
+                            std.debug.print("Native: {s}", .{native_data.name});
                         },
                     }
                 } else {
@@ -147,11 +135,11 @@ pub const Value = union(ValueType) {
             const str_b = b.string orelse return null;
 
             // Create a new buffer for the concatenated string
-            var result = try allocator.alloc(u8, str_a.length + str_b.length);
+            var result = try allocator.alloc(u8, str_a.length() + str_b.length());
             defer allocator.free(result); // Free the temporary buffer after we're done with it
 
-            @memcpy(result[0..str_a.length], str_a.chars);
-            @memcpy(result[str_a.length..], str_b.chars);
+            @memcpy(result[0..str_a.length()], str_a.get_chars());
+            @memcpy(result[str_a.length()..], str_b.get_chars());
 
             // Create a new string object with the concatenated result
             const str = try String.init(allocator, result);

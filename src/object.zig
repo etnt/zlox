@@ -14,6 +14,11 @@ pub const ObjectType = enum {
 /// Object represents any heap-allocated value
 pub const Object = struct {
     type: ObjectType,
+    data: union(ObjectType) {
+        string: *String,
+        function: *Function,
+        native_function: *NativeFunction,
+    },
     // Add garbage collection fields later
 
     pub const NativeFunction = struct {
@@ -24,12 +29,13 @@ pub const Object = struct {
 
         pub fn init(allocator: std.mem.Allocator, name: []const u8, function: *const fn([]Value) Value, arity: usize) !*NativeFunction {
             const native = try allocator.create(NativeFunction);
-            native.* = .{
-                .obj = .{ .type = .native_function },
-                .function = function,
-                .name = try allocator.dupe(u8, name),
-                .arity = arity,
+            native.obj = .{ 
+                .type = .native_function,
+                .data = .{ .native_function = native },
             };
+            native.function = function;
+            native.name = try allocator.dupe(u8, name);
+            native.arity = arity;
             return native;
         }
 
@@ -38,6 +44,11 @@ pub const Object = struct {
             allocator.destroy(self);
         }
     };
+
+    // Type-safe helper method
+    pub fn asNativeFunction(self: *Object) *NativeFunction {
+        return self.data.native_function;
+    }
 
     pub const Function = struct {
         obj: Object,
@@ -48,11 +59,13 @@ pub const Object = struct {
         pub fn init(allocator: std.mem.Allocator, name: []const u8, arity: usize, chunk: Chunk) !*Function {
             // Create a new function object
             const function = try allocator.create(Function);
-            function.obj = .{ .type = .function };
+            function.obj = .{ 
+                .type = .function,
+                .data = .{ .function = function },
+            };
             function.arity = arity;
             function.chunk = chunk;
             function.name = try allocator.dupe(u8, name);
-
             return function;
         }
 
@@ -76,26 +89,32 @@ pub const Object = struct {
         }
     };
 
+    // Type-safe helper method
+    pub fn asFunction(self: *Object) *Function {
+        return self.data.function;
+    }
+
     /// String object type
     pub const String = struct {
         obj: Object,
-        length: usize,
-        chars: []u8,
+        chars: []const u8,
 
-        pub fn init(allocator: std.mem.Allocator, chars: []const u8) !*String {
+        pub fn init(allocator: std.mem.Allocator, cs: []const u8) !*String {
             // Initialize the intern pool if it doesn't exist
             initInternPool(allocator);
 
             // Check if this string is already interned
-            if (string_intern_pool.?.get(chars)) |existing| {
+            if (string_intern_pool.?.get(cs)) |existing| {
                 return existing;
             }
 
             // Create a new string object
             const string = try allocator.create(String);
-            string.obj = .{ .type = .string };
-            string.length = chars.len;
-            string.chars = try allocator.dupe(u8, chars);
+            string.obj = .{ 
+                .type = .string,
+                .data = .{ .string = string },
+            };
+            string.chars = try allocator.dupe(u8, cs);
 
             // Add to intern pool
             try string_intern_pool.?.put(string.chars, string);
@@ -112,7 +131,20 @@ pub const Object = struct {
             allocator.free(self.chars);
             allocator.destroy(self);
         }
+
+        pub fn length(self: *String) usize {
+            return self.chars.len;
+        }
+
+        pub fn get_chars(self: *String) []const u8 {
+            return self.chars;
+        }
     };
+
+    // Type-safe helper method
+    pub fn asString(self: *Object) *String {
+        return self.data.string;
+    }
 };
 
 /// Global string interning state

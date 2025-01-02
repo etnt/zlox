@@ -67,12 +67,9 @@ pub const VM = struct {
         };
 
         // Create a dummy function for the top-level code, but don't take ownership of the chunk
-        const topFunction = try allocator.create(Function);
-        topFunction.* = .{
-            .obj = .{ .type = .function },
-            .arity = 0,
-            .chunk = chunk.*,
-            .name = try allocator.dupe(u8, "script"),
+        const topFunction = Function.init(allocator, "script", 0, chunk.*) catch |err| {
+            utils.debugPrint(@src(), "Error creating top-level function: {s}\n", .{@errorName(err)});
+            return err; 
         };
 
         // Create and add the initial frame
