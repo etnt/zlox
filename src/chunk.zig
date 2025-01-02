@@ -79,10 +79,11 @@ pub const Chunk = struct {
         // After disassembling this chunk, look for any function chunks in the constants
         for (self.constants.values.items) |value| {
             switch (value) {
-                .function => |maybe_func| {
-                    if (maybe_func) |func| {
+                .closure => |maybe_closure| {
+                    if (maybe_closure) |closure| {
+                        // The function field is not optional, we can access it directly
                         std.debug.print("\n", .{});
-                        func.chunk.disassemble(func.name);
+                        closure.function.chunk.disassemble(closure.function.name);
                     }
                 },
                 else => {},
