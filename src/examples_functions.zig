@@ -44,9 +44,13 @@ pub fn function_sum(allocator: std.mem.Allocator) !Chunk {
     try sumChunk.writeOpcode(OpCode.RETURN, 1);
     // --- End of sum Chunk
 
-    // Create the sum function
+    // Create the sum function and wrap it in a closure
     const sumFun = try Value.createFunction(allocator, "sum", 3, sumChunk);
-    const sum = try chunk.addConstant(sumFun);
+    // Create an empty upvalue array since sum doesn't use any upvalues
+    var upvalues = std.ArrayList(Value).init(allocator);
+    defer upvalues.deinit();
+    const sumClosure = try Value.createClosure(allocator, sumFun.function.?, upvalues.items);
+    const sum = try chunk.addConstant(sumClosure);
 
     // --- Begin Top Level Chunk
     // Allocate slot 0 (= "script" , i.e the top-level) on the stack
@@ -56,7 +60,7 @@ pub fn function_sum(allocator: std.mem.Allocator) !Chunk {
     try chunk.writeOpcode(OpCode.CONSTANT, 4);
     try chunk.writeByte(@intCast(four), 4);
 
-    // Push the sum function reference onto the stack
+    // Push the sum closure reference onto the stack
     try chunk.writeOpcode(OpCode.CONSTANT, 4);
     try chunk.writeByte(@intCast(sum), 4);
 
