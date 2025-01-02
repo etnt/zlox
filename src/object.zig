@@ -84,6 +84,7 @@ pub const Object = struct {
     pub const Function = struct {
         obj: Object,
         arity: usize,
+        upvalueCount: usize,
         chunk: Chunk,
         name: []const u8,
 
@@ -95,6 +96,7 @@ pub const Object = struct {
                 .data = .{ .function = function },
             };
             function.arity = arity;
+            function.upvalueCount = 0;
             function.chunk = chunk;
             function.name = try allocator.dupe(u8, name);
             return function;

@@ -118,10 +118,38 @@ pub const Chunk = struct {
                             std.debug.print("CLOSURE           {d} '", .{constant_index});
                             constant_value.print();
                             std.debug.print("'\n", .{});
-                            return offset + 2; // Skip the opcode and the constant index
+
+                            // Print the upvalues
+                            // For each upvalue the closure captures, there are two single-byte operands.
+                            // Each pair of operands specifies what that upvalue captures.
+                            // If the first byte is one, it captures a local variable in the enclosing function.
+                            // If zero, it captures one of the function’s upvalues.
+                            // The next byte is the local slot or upvalue index to capture.
+                            const closure = constant_value.closure orelse return offset + 2;
+                            const function = closure.function;
+                            const upvalueCount = function.upvalueCount;
+                            var i: usize = 0;
+                            var delta_offset: usize = 0;
+                            while (i < upvalueCount) : (i += 1) {
+                                const upvalue_index = self.code.at(offset + delta_offset + 2).?;
+                                std.debug.print("upvalue {d} ", .{upvalue_index});
+                                delta_offset += 2;
+                            }
+
+                            return offset + delta_offset + 2;
                         }
                     }
                     std.debug.print("CLOSURE          <error>\n", .{});
+                    return offset + 2;
+                },
+                OpCode.GET_UPVALUE => {
+                    const upvalue_index = self.code.at(offset + 1).?;
+                    std.debug.print("GET_UPVALUE      {d} \n", .{upvalue_index});
+                    return offset + 2;
+                },
+                OpCode.SET_UPVALUE => {
+                    const upvalue_index = self.code.at(offset + 1).?;
+                    std.debug.print("SET_UPVALUE      {d} \n", .{upvalue_index});
                     return offset + 2;
                 },
                 OpCode.TRUE => {

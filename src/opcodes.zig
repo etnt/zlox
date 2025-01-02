@@ -27,7 +27,17 @@ pub const OpCode = struct {
     pub const GREATER: u8 = 0x18;          // Greater than test
     pub const LOOP: u8 = 0x19;             // Loop works like JUMP but jump backward
     pub const CALL: u8 = 0x1A;             // Call a function (1 byte operand) argCount
-    pub const CLOSURE: u8 = 0x1B;          // Create a closure (1 byte operand): constant index to function
+    //
+    // The CLOSURE instruction is unique in that it has a variably sized encoding.
+    // For each upvalue the closure captures, there are two single-byte operands.
+    // Each pair of operands specifies what that upvalue captures.
+    // If the first byte is one, it captures a local variable in the enclosing function.
+    // If zero, it captures one of the function’s upvalues.
+    // The next byte is the local slot or upvalue index to capture.
+    //
+    pub const CLOSURE: u8 = 0x1B;          // Create a closure (1 byte operand + variable number of operands): constant index to function + upvalues
+    pub const GET_UPVALUE: u8 = 0x1C;      // Get an upvalue (1 byte operand) upvalue index
+    pub const SET_UPVALUE: u8 = 0x1D;      // Set an upvalue (1 byte operand) upvalue index
 
 
     // Convert opcode value to name
