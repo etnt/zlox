@@ -10,6 +10,7 @@ const InterpretResult = vm_mod.InterpretResult;
 const obj = @import("object.zig");
 const ex: type = @import("examples.zig");
 const exfun: type = @import("examples_functions.zig");
+const exclos: type = @import("examples_closures.zig");
 
 pub fn main() !u8 {
     // Get a general purpose allocator
@@ -60,6 +61,7 @@ pub fn main() !u8 {
         std.debug.print(" 10: function call (sum)\n", .{});
         std.debug.print(" 11: function call (factorial)\n", .{});
         std.debug.print(" 12: native functions (clock & sleep)\n", .{});
+        std.debug.print(" 14: closures\n", .{});
         return 0;
     }
 
@@ -119,6 +121,10 @@ pub fn main() !u8 {
         12 => blk: {
             ex_name = "\nt1 = clock();\nsleep(2);\nt2 = clock();\nprint t2 - t1;";
             break :blk try exfun.function_native_clock(allocator);
+        },
+        14 => blk: {
+            ex_name = "\nfun f() {\n  print a;\n}\nvar a = 3;\nf();";
+            break :blk try exclos.simple_closure(allocator);
         },
         else => {
             std.debug.print("Invalid example number. Use --help to see available examples.\n", .{});
