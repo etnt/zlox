@@ -27,6 +27,7 @@ pub const OpCode = struct {
     pub const GREATER: u8 = 0x18;          // Greater than test
     pub const LOOP: u8 = 0x19;             // Loop works like JUMP but jump backward
     pub const CALL: u8 = 0x1A;             // Call a function (1 byte operand) argCount
+    pub const CLOSURE: u8 = 0x1B;          // Create a closure (1 byte operand): constant index to function
 
 
     // Convert opcode value to name
