@@ -570,6 +570,27 @@ pub const VM = struct {
                     const result = self.binary_op(Value.gt);
                     if (result != InterpretResult.INTERPRET_OK) return result;
                 },
+                OpCode.CLOSURE => {
+                    // Load the compiled function from the constant table.
+                    // Wrap that function in a new Closure and push the result onto the stack.
+                    const constant = frame.function.chunk.constants.at(frame.ip[0]).?;
+                    frame.ip += 1;
+                    const function = constant.function;
+                    if (function) |fun| {
+                        const argCount = fun.arity;
+                        const closure = Value.createClosure(self.allocator, fun, self.stack.items[0..argCount]) catch |err| {
+                            utils.debugPrint(@src(), "Error creating closure: {s}\n", .{@errorName(err)});
+                            return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                        };
+                        self.push(closure) catch |err| {
+                            utils.debugPrint(@src(), "Error pushing closure: {s}\n", .{@errorName(err)});
+                            return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                        };
+                    } else {
+                        utils.debugPrint(@src(), "Invalid constant type for CLOSURE\n", .{});
+                        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                    }
+                },
                 OpCode.CALL => {
                     const argCount = frame.ip[0];
                     frame.ip += 1;

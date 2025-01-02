@@ -11,7 +11,16 @@ pub const NativeFunction = obj.Object.NativeFunction;
 pub const Closure = obj.Object.Closure;
 
 /// ValueType represents the different types of values our VM can handle
-pub const ValueType = enum { nil, number, boolean, object, string, function, native_function };
+pub const ValueType = enum { 
+    nil,
+    number,
+    boolean,
+    object,
+    string,
+    function,
+    native_function,
+    closure,
+};
 
 /// Value represents a constant value in our bytecode
 pub const Value = union(ValueType) {
@@ -22,6 +31,7 @@ pub const Value = union(ValueType) {
     string: ?*String,
     function: ?*Function,
     native_function: ?*NativeFunction,
+    closure: ?*Closure,
 
     /// Print a value
     pub fn print(self: Value) void {
@@ -48,6 +58,14 @@ pub const Value = union(ValueType) {
                     std.debug.print("Native Function: {s}", .{func_ptr.name});
                 } else {
                     std.debug.print("null native function", .{});
+                }
+            },
+            .closure => |f| {
+                if (f) |closure_ptr| {
+                    const func_ptr = closure_ptr.function;
+                    std.debug.print("Closure for function: {s}", .{func_ptr.name});
+                } else {
+                    std.debug.print("null closure", .{});
                 }
             },
             .object => |o| {
@@ -127,6 +145,11 @@ pub const Value = union(ValueType) {
         return Value{ .native_function = native };
     }
 
+    pub fn createClosure(allocator: std.mem.Allocator, function: *Function, upvalues: []Value) !Value {
+        const closure = try Closure.init(allocator, function, upvalues);
+        return Value{ .closure = closure };
+    }
+
     /// Add two values
     pub fn add(a: Value, b: Value, allocator: std.mem.Allocator) !?Value {
         // Handle number addition
@@ -203,7 +226,7 @@ pub const Value = union(ValueType) {
     pub fn negate(self: Value) ?Value {
         return switch (self) {
             .number => |n| Value.number(-n),
-            .nil, .boolean, .string, .function, .native_function, .object => null,
+            .nil, .boolean, .string, .function, .native_function, .closure, .object => null,
         };
     }
 
@@ -229,7 +252,7 @@ pub const Value = union(ValueType) {
     pub fn not(self: Value) ?Value {
         return switch (self) {
             .boolean => |b| Value.boolean(!b),
-            .nil, .number, .string, .function, .native_function, .object => null,
+            .nil, .number, .string, .function, .native_function, .closure, .object => null,
         };
     }
 
@@ -250,6 +273,7 @@ pub const Value = union(ValueType) {
             },
             .function => |func_a| b.function == func_a,  // FIXME: compare function pointers?
             .native_function => |func_a| b.native_function == func_a,
+            .closure => |closure_a| b.closure == closure_a,  // FIXME: compare closure pointers?
             .object => |obj_a| b.object == obj_a,
         };
     }
@@ -266,6 +290,7 @@ pub const Value = union(ValueType) {
             } else Value{ .string = null },
             .function => |f| Value{ .function = f },    // FIXME - clone function
             .native_function => |f| Value{ .native_function = f },
+            .closure => |f| Value{ .closure = f },      // FIXME - clone closure
             .object => |o| Value{ .object = o },
         };
     }
