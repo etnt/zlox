@@ -6,6 +6,7 @@ const obj = @import("object.zig");
 const utils = @import("utils.zig");
 
 pub const Object = obj.Object;
+pub const Closure = obj.Object.Closure;
 pub const Function = obj.Object.Function;
 pub const NativeFunction = obj.Object.NativeFunction;
 pub const String = obj.Object.String;
@@ -20,7 +21,8 @@ pub const InterpretResult = enum(u8) {
 pub const CallFrame = struct {
     // Function being called, we'll use that to look up
     // constants and for a few other things.
-    function: *Function,
+    //function: *Function,
+    closure: *Closure,
     // Instead of storing the return address in the callee's frame,
     // the caller stores its own ip. When we return from a function,
     // the VM will jump to the ip of the caller's CallFrame and resume
@@ -30,9 +32,10 @@ pub const CallFrame = struct {
     // function can use.
     slots: usize,
 
-    pub fn init(function: *Function, slots: usize) CallFrame {
+    pub fn init(closure: *Closure, slots: usize) CallFrame {
+        const function = closure.function;
         return CallFrame{
-            .function = function,
+            .closure = closure,
             .ip = function.chunk.code.bytes.items.ptr, // FIXME correct ?
             .slots = slots,
         };
@@ -72,8 +75,14 @@ pub const VM = struct {
             return err; 
         };
 
+        // Create a dummy closure for the top-level code
+        const topClosure = Closure.init(allocator, topFunction, std.ArrayList(Value).init(allocator).items) catch |err| {
+            utils.debugPrint(@src(), "Error creating top-level closure: {s}\n", .{@errorName(err)});
+            return err; 
+        };
+
         // Create and add the initial frame
-        const initFrame = CallFrame.init(topFunction, 0);
+        const initFrame = CallFrame.init(topClosure, 0);
         try vm.call_frames.append(initFrame);
         vm.frame_cnt = 1; // Note: frame_cnt is 1-based!
 
@@ -84,9 +93,12 @@ pub const VM = struct {
     pub fn deinit(self: *VM) void {
         // Clean up all call frames and their functions, but don't free their chunks
         for (self.call_frames.items) |frame| {
+            const closure = frame.closure;
             // Free only the function's name and the function object itself
-            self.allocator.free(frame.function.name);
-            self.allocator.destroy(frame.function);
+            self.allocator.free(closure.function.name);
+            self.allocator.destroy(closure.function);
+            // Free the closure itself
+            self.allocator.destroy(closure);
         }
         self.call_frames.deinit();
 
@@ -246,9 +258,9 @@ pub const VM = struct {
                 // Print the stack before each instruction
                 self.printStack();
                 const current_frame = &self.call_frames.items[self.frame_cnt - 1];
-                const offset = @intFromPtr(current_frame.ip) - @intFromPtr(current_frame.function.chunk.code.bytes.items.ptr);
+                const offset = @intFromPtr(current_frame.ip) - @intFromPtr(current_frame.closure.function.chunk.code.bytes.items.ptr);
                 std.debug.print("{d:0>4}   ", .{offset});
-                _ = current_frame.function.chunk.disassembleInstruction(offset);
+                _ = current_frame.closure.function.chunk.disassembleInstruction(offset);
             }
 
             var frame = &self.call_frames.items[self.frame_cnt - 1];
@@ -263,7 +275,7 @@ pub const VM = struct {
                     };
                 },
                 OpCode.CONSTANT => {
-                    const constant = frame.function.chunk.constants.at(frame.ip[0]).?;
+                    const constant = frame.closure.function.chunk.constants.at(frame.ip[0]).?;
                     frame.ip += 1;
                     self.push(constant) catch |err| {
                         utils.debugPrint(@src(), "Error pushing constant: {s}\n", .{@errorName(err)});
@@ -573,7 +585,7 @@ pub const VM = struct {
                 OpCode.CLOSURE => {
                     // Load the compiled function from the constant table.
                     // Wrap that function in a new Closure and push the result onto the stack.
-                    const constant = frame.function.chunk.constants.at(frame.ip[0]).?;
+                    const constant = frame.closure.function.chunk.constants.at(frame.ip[0]).?;
                     frame.ip += 1;
                     const function = constant.function;
                     if (function) |fun| {
@@ -601,19 +613,37 @@ pub const VM = struct {
 
                     // Handle both regular functions and native functions
                     switch (callee) {
-                        .function => |maybe_function| {
-                            if (maybe_function) |function| {
-                                const new_frame = CallFrame.init(function, self.stack.items.len - argCount - 1);
+                        .closure => |maybe_closure| {
+                            if (maybe_closure) |closure| {
+                                const new_frame = CallFrame.init(closure, self.stack.items.len - argCount - 1);
                                 self.call_frames.append(new_frame) catch |err| {
                                     utils.debugPrint(@src(), "Error appending call frame: {s}\n", .{@errorName(err)});
                                     return InterpretResult.INTERPRET_RUNTIME_ERROR;
                                 };
                                 self.frame_cnt += 1;
-                                self.sp = new_frame.slots + function.arity;
+                                self.sp = new_frame.slots + closure.function.arity;
                             } else {
-                                utils.debugPrint(@src(), "Function is null\n", .{});
+                                utils.debugPrint(@src(), "Closure is null\n", .{});
                                 return InterpretResult.INTERPRET_RUNTIME_ERROR;
                             }
+                        },
+                        // FIXME: remove the code for calling Function objects since we, from now on,
+                        // wrap all functions in Closures, the runtime will never try to invoke a bare
+                        // Function anymore.
+                        .function => |maybe_function| {
+                            _ = maybe_function;
+                            //if (maybe_function) |function| {
+                            //    const new_frame = CallFrame.init(function, self.stack.items.len - argCount - 1);
+                            //    self.call_frames.append(new_frame) catch |err| {
+                            //        utils.debugPrint(@src(), "Error appending call frame: {s}\n", .{@errorName(err)});
+                            //        return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                            //    };
+                            //    self.frame_cnt += 1;
+                            //    self.sp = new_frame.slots + function.arity;
+                            //} else {
+                            //    utils.debugPrint(@src(), "Function is null\n", .{});
+                            //    return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                            //}
                         },
                         .native_function => |maybe_native| {
                             if (maybe_native) |native| {
