@@ -111,6 +111,18 @@ pub const Chunk = struct {
                     std.debug.print("CONSTANT         <error>\n", .{});
                     return offset + 2;
                 },
+                OpCode.CLOSURE => {
+                    if (self.code.at(offset + 1)) |constant_index| {
+                        if (self.constants.at(constant_index)) |constant_value| {
+                            std.debug.print("CLOSURE           {d} '", .{constant_index});
+                            constant_value.print();
+                            std.debug.print("'\n", .{});
+                            return offset + 2; // Skip the opcode and the constant index
+                        }
+                    }
+                    std.debug.print("CLOSURE          <error>\n", .{});
+                    return offset + 2;
+                },
                 OpCode.TRUE => {
                     std.debug.print("TRUE\n", .{});
                     return offset + 1;

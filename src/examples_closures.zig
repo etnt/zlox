@@ -22,8 +22,11 @@ pub fn simple_closure(allocator: std.mem.Allocator) !Chunk {
     // ---------------------------
 
     // Create the function
-    //const sumFun = try Value.createFunction(allocator, "f", 0, sumChunk);
-    //const sum = try chunk.addConstant(sumFun);
+    //const fFun = try Value.createFunction(allocator, "f", 0, sumChunk);
+    //const f = try chunk.addConstant(sumFun);
+
+    //try chunk.writeOpcode(OpCode.CLOSURE, 1);
+    //try chunk.writeByte(@intCast(f), 1);
 
     return chunk;
 }
