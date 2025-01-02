@@ -8,6 +8,7 @@ pub const ObjectType = enum {
     string,
     function,
     native_function,
+    closure,
     // More object types will be added later (class, instance, etc.)
 };
 
@@ -18,8 +19,38 @@ pub const Object = struct {
         string: *String,
         function: *Function,
         native_function: *NativeFunction,
+        closure: *Closure,
     },
     // Add garbage collection fields later
+
+    pub const Closure = struct {
+        obj: Object,
+        function: *Function,
+        upvalues: []Value,
+
+        pub fn init(allocator: std.mem.Allocator, function: *Function, upvalues: []Value) !*Closure {
+            const closure = try allocator.create(Closure);
+            closure.obj = .{ 
+                .type = .closure,
+                .data = .{ .closure = closure },
+            };
+            closure.function = function;
+            closure.upvalues = upvalues;  // FIXME: Should we copy the upvalues?
+            return closure;
+        }
+
+        pub fn deinit(self: *Closure, allocator: std.mem.Allocator) void {
+            // We free only the Closure itself, not the Function.
+            // That’s because the closure doesn’t own the function.
+            // There may be multiple closures that all reference the same function.
+            allocator.destroy(self);
+        }
+    };
+
+    // Type-safe helper method
+    pub fn asClosure(self: *Object) *Closure {
+        return self.data.closure;
+    }
 
     pub const NativeFunction = struct {
         obj: Object,

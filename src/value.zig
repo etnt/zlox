@@ -8,6 +8,7 @@ pub const Object = obj.Object;
 pub const String = obj.Object.String;
 pub const Function = obj.Object.Function;
 pub const NativeFunction = obj.Object.NativeFunction;
+pub const Closure = obj.Object.Closure;
 
 /// ValueType represents the different types of values our VM can handle
 pub const ValueType = enum { nil, number, boolean, object, string, function, native_function };
@@ -64,6 +65,10 @@ pub const Value = union(ValueType) {
                         .native_function => {
                             const native_data: *NativeFunction = obj_ptr.asNativeFunction();
                             std.debug.print("Native: {s}", .{native_data.name});
+                        },
+                        .closure => {
+                            const closure_data: *Closure = obj_ptr.asClosure();
+                            std.debug.print("Closure: {s}", .{closure_data.function.name});
                         },
                     }
                 } else {
