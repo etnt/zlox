@@ -9,6 +9,7 @@ pub const String = obj.Object.String;
 pub const Function = obj.Object.Function;
 pub const NativeFunction = obj.Object.NativeFunction;
 pub const Closure = obj.Object.Closure;
+pub const Upvalue = obj.Object.Upvalue;
 
 /// ValueType represents the different types of values our VM can handle
 pub const ValueType = enum { 
@@ -20,6 +21,7 @@ pub const ValueType = enum {
     function,
     native_function,
     closure,
+    upvalue,
 };
 
 /// Value represents a constant value in our bytecode
@@ -32,6 +34,8 @@ pub const Value = union(ValueType) {
     function: ?*Function,
     native_function: ?*NativeFunction,
     closure: ?*Closure,
+    upvalue: ?*Upvalue,
+
 
     /// Print a value
     pub fn print(self: Value) void {
@@ -68,6 +72,15 @@ pub const Value = union(ValueType) {
                     std.debug.print("null closure", .{});
                 }
             },
+            .upvalue => |f| {
+                if (f) |upvalue_ptr| {
+                    const value_ptr = upvalue_ptr.location;
+                    std.debug.print("Upvalue: ", .{});
+                    value_ptr.*.print();
+                } else {
+                    std.debug.print("null upvalue", .{});
+                }
+            },
             .object => |o| {
                 if (o) |obj_ptr| {
                     switch (obj_ptr.type) {
@@ -87,6 +100,11 @@ pub const Value = union(ValueType) {
                         .closure => {
                             const closure_data: *Closure = obj_ptr.asClosure();
                             std.debug.print("Closure: {s}", .{closure_data.function.name});
+                        },
+                        .upvalue => {
+                            const upvalue_data: *Upvalue = obj_ptr.asUpvalue();
+                            std.debug.print("Upvalue: ", .{});
+                            upvalue_data.location.*.print();
                         },
                     }
                 } else {
@@ -226,7 +244,7 @@ pub const Value = union(ValueType) {
     pub fn negate(self: Value) ?Value {
         return switch (self) {
             .number => |n| Value.number(-n),
-            .nil, .boolean, .string, .function, .native_function, .closure, .object => null,
+            .nil, .boolean, .string, .function, .native_function, .closure, .upvalue, .object => null,
         };
     }
 
@@ -252,7 +270,7 @@ pub const Value = union(ValueType) {
     pub fn not(self: Value) ?Value {
         return switch (self) {
             .boolean => |b| Value.boolean(!b),
-            .nil, .number, .string, .function, .native_function, .closure, .object => null,
+            .nil, .number, .string, .function, .native_function, .closure, .upvalue, .object => null,
         };
     }
 
@@ -274,6 +292,9 @@ pub const Value = union(ValueType) {
             .function => |func_a| b.function == func_a,  // FIXME: compare function pointers?
             .native_function => |func_a| b.native_function == func_a,
             .closure => |closure_a| b.closure == closure_a,  // FIXME: compare closure pointers?
+            .upvalue => |upvalue_a| b.upvalue == upvalue_a,  // FIXME: compare upvalue pointers?
+
+
             .object => |obj_a| b.object == obj_a,
         };
     }
@@ -291,6 +312,7 @@ pub const Value = union(ValueType) {
             .function => |f| Value{ .function = f },    // FIXME - clone function
             .native_function => |f| Value{ .native_function = f },
             .closure => |f| Value{ .closure = f },      // FIXME - clone closure
+            .upvalue => |f| Value{ .upvalue = f },      // FIXME - clone upvalue
             .object => |o| Value{ .object = o },
         };
     }

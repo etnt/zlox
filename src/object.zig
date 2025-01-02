@@ -9,6 +9,7 @@ pub const ObjectType = enum {
     function,
     native_function,
     closure,
+    upvalue,
     // More object types will be added later (class, instance, etc.)
 };
 
@@ -20,8 +21,33 @@ pub const Object = struct {
         function: *Function,
         native_function: *NativeFunction,
         closure: *Closure,
+        upvalue: *Upvalue,
     },
     // Add garbage collection fields later
+
+    pub const Upvalue = struct {
+        obj: Object,
+        location: *Value,  // a location field points to the closed-over variable
+
+        pub fn init(allocator: std.mem.Allocator, slot: *Value) !*Upvalue {
+            const upvalue = try allocator.create(Upvalue);
+            upvalue.obj = .{
+                .type = .upvalue,
+                .data = .{ .upvalue = upvalue },
+            };
+            upvalue.location = slot;
+            return upvalue;
+        }
+
+        pub fn deinit(self: *Upvalue, allocator: std.mem.Allocator) void {
+            allocator.destroy(self);
+        }
+    };
+
+    // Type-safe helper method
+    pub fn asUpvalue(self: *Object) *Upvalue {
+        return self.data.upvalue;
+    }
 
     pub const Closure = struct {
         obj: Object,
