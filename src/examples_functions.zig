@@ -10,7 +10,9 @@ const InterpretResult = vm_mod.InterpretResult;
 
 pub fn function_sum(allocator: std.mem.Allocator) !Chunk {
     var chunk = Chunk.init(allocator);
+    errdefer chunk.deinit();
     var sumChunk = Chunk.init(allocator);
+    errdefer sumChunk.deinit();
 
     // ---------------------------
     // fun sum(a, b, c) {
@@ -46,10 +48,14 @@ pub fn function_sum(allocator: std.mem.Allocator) !Chunk {
 
     // Create the sum function and wrap it in a closure
     const sumFun = try Value.createFunction(allocator, "sum", 3, sumChunk);
+    // We don't defer sumFun.deinit() here because ownership is transferred to the closure
+
     // Create an empty upvalue array since sum doesn't use any upvalues
     var upvalues = std.ArrayList(Value).init(allocator);
     defer upvalues.deinit();
     const sumClosure = try Value.createClosure(allocator, sumFun.function.?, upvalues.items);
+    // We don't defer sumClosure.deinit() here because ownership is transferred to the chunk's constants
+
     const sum = try chunk.addConstant(sumClosure);
 
     // --- Begin Top Level Chunk

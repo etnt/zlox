@@ -91,10 +91,10 @@ pub const VM = struct {
 
     /// Free the VM (does not free the chunk as it's managed elsewhere)
     pub fn deinit(self: *VM) void {
-        // Clean up all call frames and their functions, but don't free their chunks
+        // Clean up all call frames and their functions and closures
         for (self.call_frames.items) |frame| {
             const closure = frame.closure;
-            // Free only the function's name and the function object itself
+            // Free the function's name and the function object itself
             self.allocator.free(closure.function.name);
             self.allocator.destroy(closure.function);
             // Free the closure itself
@@ -102,13 +102,38 @@ pub const VM = struct {
         }
         self.call_frames.deinit();
 
+        // Clean up the constants in the chunk
+        for (self.chunk.constants.values.items) |constant| {
+            switch (constant) {
+                .function => |maybe_func| {
+                    if (maybe_func) |func| {
+                        self.allocator.free(func.name);
+                        // Free the function's chunk
+                        func.chunk.deinit();
+                        self.allocator.destroy(func);
+                    }
+                },
+                .closure => |maybe_closure| {
+                    if (maybe_closure) |closure| {
+                        // Free the function's name and chunk
+                        self.allocator.free(closure.function.name);
+                        closure.function.chunk.deinit();
+                        // Free the function itself
+                        self.allocator.destroy(closure.function);
+                        // Free the closure
+                        self.allocator.destroy(closure);
+                    }
+                },
+                else => {},
+            }
+        }
+
         // Clean up the stack and globals
         self.stack.deinit();
         self.globals.deinit();
 
         // Clean up the intern pool which owns all strings
         if (obj.string_intern_pool) |*pool| {
-            // Free all strings in the pool
             var it = pool.iterator();
             while (it.next()) |entry| {
                 const str = entry.value_ptr.*;
